@@ -1,0 +1,15 @@
+{
+  "name": "volcano-dash",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "@hytopia.com/assets": "^0.2.5",
+    "hytopia": "^0.1.92"
+  }
+}
