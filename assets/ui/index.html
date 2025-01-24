@@ -1,369 +1,572 @@
 <!-- Welcome Screen -->
-<div id="welcomeScreen" class="welcome-screen">
+
+<!-- <div id="welcomeScreen" class="welcome-screen">
     <div class="welcome-content">
       <h1>Welcome to Volcano Dash!</h1>
       <p>Work shifts absorbing energy from the lava chamber.<br>Be careful not to overheat!</p>
-      
       <div class="name-input-container">
         <label for="playerName">Enter your name and press Enter</label>
-        <input type="text" id="playerName" maxlength="20" placeholder="Type name here...">
+        <input type="text" id="playerName" maxlength="20" placeholder="Type name here..." autocomplete="off">
       </div>
     </div>
-  </div>
-  
-  <!-- Game UI -->
-  <div id="gameUI">
-    <div class="score-container">
-      <div class="score-box">
-        <div class="score-label">Energy Absorbed</div>
-        <div class="score-value" id="currentScore">0</div>
-      </div>
-      <div class="score-box">
-        <div class="score-label">Top Score</div>
-        <div class="score-value" id="topScore">0</div>
-      </div>
-    </div>
-  
-    <div class="heat-container">
-      <div class="heat-label">Heat Level</div>
-      <div class="heat-bar-wrapper">
-        <div id="heatBar" class="heat-bar"></div>
-      </div>
-    </div>
-  
-    <div id="countdownMessage" class="countdown-message"></div>
-    <div id="lavaOverlay" class="lava-overlay"></div>
-  </div>
-  
-  <!-- Game Start Countdown -->
-  <div id="countdown"></div>
-  
-  <!-- Template for Join NPC Scene UI-->
-  <template id="join-npc-message">
-    <div class="join-npc-message">
-      <h1>Join the Next Shift!</h1>
-      <p>Come close to me to grab your gear</p>
-      <p class="controls">(WASD to move, Spacebar to jump)</p>
-    </div>
-  </template>
-  
-  <!-- Template for Queued Player UI -->
-  <template id="player-queued">
-    <div class="queued-message">
-      <p style="color: #00FF00;">Ready for next shift!</p>
-    </div>
-  </template>
-  
-  <!-- Add this to your HTML -->
-  <div id="shiftEndMessage" class="shift-end-message"></div>
-  
-  <style>
-    /* Welcome Screen Styles */
-    .welcome-screen {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.9);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 2000;
+  </div> -->
+
+
+<script>
+  // Add debug logging
+  console.log('UI Script loaded');
+
+  // Add a variable to store the current player's name and ID
+  let currentPlayerName = '';
+  let currentPlayerId = null;
+
+  // Single onData handler for all game events
+
+  hytopia.onData((data) => {
+    console.log('Received data from server:', data);
+
+    // Handle initial state
+    if (data.type === 'initialState') {
+      console.log('Received initial state:', data);
+      currentPlayerName = data.playerName;
+      currentPlayerId = data.playerId;
+      updateLeaderboards(data.lastShiftLeaders, data.allTimeLeaders);
     }
-  
-    .welcome-content {
-      background: rgba(50, 50, 50, 0.95);
-      padding: 40px;
-      border-radius: 15px;
-      text-align: center;
-      color: #fff;
-      border: 2px solid #ff6600;
-      max-width: 500px;
-      pointer-events: none;
+
+    // Handle name confirmation
+    if (data.type === 'nameSet') {
+      console.log('Name set confirmation received:', data);
+      currentPlayerName = data.name;
+      currentPlayerId = data.playerId;
+      
+      // Add confirmation log
+      console.log('Name updated locally to:', currentPlayerName);
     }
-  
-    .welcome-content h1 {
-      color: #ff6600;
-      margin-bottom: 20px;
-      font-size: 32px;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-    }
-  
-    .welcome-content p {
-      margin-bottom: 30px;
-      line-height: 1.6;
-      font-size: 18px;
-      color: #eee;
-    }
-  
-    .name-input-container {
-      display: flex;
-      flex-direction: column;
-      gap: 15px;
-      align-items: center;
-    }
-  
-    .name-input-container input {
-      padding: 12px 20px;
-      border-radius: 8px;
-      border: 2px solid #ff6600;
-      background: rgba(0, 0, 0, 0.3);
-      color: white;
-      width: 250px;
-      text-align: center;
-      font-size: 18px;
-      pointer-events: auto;
-    }
-  
-    /* Game UI Styles */
-    .score-container {
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-  
-    .score-box {
-      background: rgba(0, 0, 0, 0.7);
-      padding: 10px 20px;
-      border-radius: 10px;
-      text-align: right;
-    }
-  
-    .score-label {
-      color: #ff6600;
-      font-size: 16px;
-      text-transform: uppercase;
-      margin-bottom: 5px;
-    }
-  
-    .score-value {
-      color: white;
-      font-size: 24px;
-      font-weight: bold;
-    }
-  
-    .heat-container {
-      position: fixed;
-      bottom: 40px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 60%;
-      max-width: 600px;
-      text-align: center;
-    }
-  
-    .heat-label {
-      color: #ff6600;
-      font-size: 16px;
-      text-transform: uppercase;
-      margin-bottom: 5px;
-      text-shadow: 0 1px 2px rgba(0,0,0,0.5);
-    }
-  
-    .heat-bar-wrapper {
-      width: 100%;
-      height: 20px;
-      background: rgba(0, 0, 0, 0.5);
-      border-radius: 10px;
-      overflow: hidden;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-    }
-  
-    .heat-bar {
-      width: 0%;
-      height: 100%;
-      background-color: #ffaa00;
-      transition: width 0.3s ease-out;
-    }
-  
-    .countdown-message {
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: rgba(0, 0, 0, 0.8);
-      color: #fff;
-      padding: 20px 30px;
-      border-radius: 12px;
-      font-size: 24px;
-      text-align: center;
-      opacity: 0;
-      transition: opacity 0.5s;
-      z-index: 1001;
-      pointer-events: none;
-    }
-  
-    .countdown-message.visible {
-      opacity: 1;
-    }
-  
-    .countdown-message.fade-out {
-      opacity: 0;
-    }
-  
-    .lava-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background-color: red;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s;
-    }
-  
-    .join-npc-message {
-      background: rgba(0, 0, 0, 0.8);
-      border-radius: 12px;
-      padding: 12px 20px;
-      color: white;
-      text-align: center;
-      position: relative;
-      margin-bottom: 15px;
-      pointer-events: none;
-    }
-  
-    .join-npc-message:after {
-      content: '';
-      position: absolute;
-      bottom: -10px;
-      left: 50%;
-      transform: translateX(-50%);
-      border-left: 10px solid transparent;
-      border-right: 10px solid transparent;
-      border-top: 10px solid rgba(0, 0, 0, 0.8);
-    }
-  
-    .join-npc-message h1 {
-      font-size: 24px;
-      color: #ff6600;
-      margin: 0 0 8px 0;
-      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
-    }
-  
-    .join-npc-message p {
-      font-size: 16px;
-      margin: 0;
-      line-height: 1.4;
-    }
-  
-    .join-npc-message .controls {
-      color: #ccc;
-      margin-top: 8px;
-      font-size: 14px;
-    }
-  </style>
-  
-  <script>
-    var playerName = '';
-  
-    // Welcome screen handlers
-    window.addEventListener('load', function() {
-      var nameInput = document.getElementById('playerName');
-      if (nameInput) {
-        nameInput.focus();
+
+    // Handle player state updates
+
+    if (data.type === 'updatePlayerState') {
+      var heatBar = document.getElementById('heatBar');
+      var heatPercent = (data.heatLevel / 1000) * 100;
+      heatBar.style.width = heatPercent + '%';
+      heatBar.style.backgroundColor = heatPercent > 75 ? '#ff0000' : 
+                                    heatPercent > 50 ? '#ff6600' : '#ffaa00';
+
+      document.getElementById('lavaOverlay').style.opacity = data.inLava ? '0.4' : '0';
+      document.getElementById('currentScore').textContent = formatScore(data.score);
+      document.getElementById('topScore').textContent = formatScore(data.topScore);
+      
+      // Update leaderboards if included
+      if (data.lastShiftLeaders && data.allTimeLeaders) {
+        updateLeaderboards(data.lastShiftLeaders, data.allTimeLeaders);
       }
-    });
-  
-    document.getElementById('playerName').addEventListener('keyup', function(e) {
-      if (e.key === 'Enter') {
-        var nameInput = document.getElementById('playerName');
-        var inputName = nameInput.value.trim();
-        
-        if (inputName) {
-          playerName = inputName;
-          document.getElementById('welcomeScreen').style.display = 'none';
+    }
+
+    // Handle countdown updates
+
+    if (data.type === 'countdownUpdate') {
+      var messageEl = document.getElementById('countdownMessage');
+      if (!messageEl) return;
+      
+      if (data.seconds <= 0) {
+        messageEl.classList.remove('visible', 'fade-out');
+        messageEl.textContent = '';
+      } else {
+        messageEl.textContent = `Shift Starting in ${data.seconds} Seconds`;
+        messageEl.classList.toggle('fade-out', data.shouldFade);
+        messageEl.classList.toggle('visible', !data.shouldFade);
+      }
+    }
+
+    // Handle supercharge states
+
+    if (data.type === 'superChargeState') {
+      const superChargeUI = document.getElementById('superChargeUI');
+      const chargeBar = document.getElementById('chargeBar');
+      const chargeFill = chargeBar.querySelector('.charge-fill');
+      const superChargePrompt = document.getElementById('superChargePrompt');
+
+      switch(data.state) {
+        case 'enter':
+          superChargeUI.style.display = 'block';
+          chargeBar.style.display = 'none';
+          superChargePrompt.textContent = 'Press F to Super Charge your Energy';
+          break;
           
-          hytopia.sendData({
-            type: 'setPlayerName',
-            name: inputName
-          });
-        }
+        case 'charging':
+          superChargeUI.style.display = 'block';
+          chargeBar.style.display = 'block';
+          chargeFill.style.width = `${data.progress}%`;
+          break;
+          
+        case 'complete':
+          chargeBar.style.display = 'none';
+          superChargePrompt.textContent = 'Super Charge Successful!';
+          setTimeout(() => {
+            superChargeUI.style.display = 'none';
+          }, 2000);
+          break;
+          
+        case 'exit':
+          superChargeUI.style.display = 'none';
+          break;
+
+        case 'alreadyUsed':
+          superChargeUI.style.display = 'block';
+          chargeBar.style.display = 'none';
+          superChargePrompt.textContent = 'Already used this Super Charge!';
+          setTimeout(() => {
+            superChargeUI.style.display = 'none';
+          }, 2000);
+          break;
       }
-    });
-  
-    document.getElementById('playerName').addEventListener('keydown', function(e) {
-      e.stopPropagation();
-    });
-  
-    document.addEventListener('click', function(e) {
-      if (document.getElementById('welcomeScreen').style.display !== 'none') {
-        if (e.target.id !== 'playerName') {
-          e.preventDefault();
-          e.stopPropagation();
-          var nameInput = document.getElementById('playerName');
-          if (nameInput) {
-            nameInput.focus();
-          }
-        }
-      }
-    }, true);
-  
-    // Game UI handlers
-    hytopia.onData(function(data) {
-      if (data.type === 'updatePlayerState') {
-        // Update heat bar
-        var heatBar = document.getElementById('heatBar');
-        var heatPercent = (data.heatLevel / 1000) * 100;
-        heatBar.style.width = heatPercent + '%';
-  
-        // Update heat bar color based on percentage
-        if (heatPercent > 75) {
-          heatBar.style.backgroundColor = '#ff0000';
-        } else if (heatPercent > 50) {
-          heatBar.style.backgroundColor = '#ff6600';
-        } else {
-          heatBar.style.backgroundColor = '#ffaa00';
-        }
-  
-        // Update lava overlay
-        var lavaOverlay = document.getElementById('lavaOverlay');
-        lavaOverlay.style.opacity = data.inLava ? '0.4' : '0';
-  
-        // Update scores
-        document.getElementById('currentScore').textContent = formatScore(data.score);
-        document.getElementById('topScore').textContent = formatScore(data.topScore);
-      }
-  
-      if (data.type === 'countdownUpdate') {
-        var messageEl = document.getElementById('countdownMessage');
-        if (!messageEl) return;
-        
-        if (data.seconds <= 0) {
-          messageEl.classList.remove('visible');
-          messageEl.classList.remove('fade-out');
-          messageEl.textContent = '';
-        } else {
-          messageEl.textContent = `Shift Starting in ${data.seconds} Seconds`;
-          if (data.shouldFade) {
-            messageEl.classList.add('fade-out');
-          } else {
-            messageEl.classList.add('visible');
-            messageEl.classList.remove('fade-out');
-          }
-        }
-      }
-    });
-  
-    function formatScore(score) {
-      return score.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
     }
-  
-    // Register both templates for the NPC and queued state
-    hytopia.registerSceneUITemplate('join-npc-message', () => {
-      const joinNpcUi = document.getElementById('join-npc-message').content.cloneNode(true);
-      return joinNpcUi;
+
+    // Handle leaderboard updates
+
+    if (data.type === 'updateLeaderboards') {
+      updateLeaderboards(data.lastShiftLeaders, data.allTimeLeaders);
+    }
+  });
+
+  // Helper functions
+
+  function formatScore(score) {
+    return score.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  }
+
+  // Template registrations
+
+  hytopia.registerSceneUITemplate('join-npc-message', () => {
+    return document.getElementById('join-npc-message').content.cloneNode(true);
+  });
+
+  hytopia.registerSceneUITemplate('player-queued', () => {
+    return document.getElementById('player-queued').content.cloneNode(true);
+  });
+
+  // Add a helper function to update leaderboards
+  function updateLeaderboards(lastShiftLeaders, allTimeLeaders) {
+    console.log('Updating leaderboards with:', lastShiftLeaders, allTimeLeaders);
+    
+    const lastShiftList = document.getElementById('lastShiftLeaders');
+    const allTimeList = document.getElementById('allTimeLeaders');
+    
+    if (lastShiftLeaders && lastShiftLeaders.length > 0) {
+      lastShiftList.innerHTML = lastShiftLeaders
+        .map((entry, index) => `
+          <div class="leaderboard-entry ${entry.name === currentPlayerName ? 'current-player' : ''}">
+            <span class="name">${index + 1}. ${entry.name}</span>
+            <span class="score">${formatScore(entry.score)}</span>
+          </div>
+        `).join('');
+    } else {
+      lastShiftList.innerHTML = '<div class="leaderboard-entry">No scores yet</div>';
+    }
+    
+    if (allTimeLeaders && allTimeLeaders.length > 0) {
+      allTimeList.innerHTML = allTimeLeaders
+        .map((entry, index) => `
+          <div class="leaderboard-entry ${entry.name === currentPlayerName ? 'current-player' : ''}">
+            <span class="name">${index + 1}. ${entry.name}</span>
+            <span class="score">${formatScore(entry.score)}</span>
+          </div>
+        `).join('');
+    } else {
+      allTimeList.innerHTML = '<div class="leaderboard-entry">No scores yet</div>';
+    }
+  }
+
+  // Add debug logging
+  const originalSendData = hytopia.ui.sendData;
+  hytopia.ui.sendData = function(data) {
+    console.log('Sending data to server:', data);
+    originalSendData.call(this, data);
+  };
+
+  const originalOnData = hytopia.onData;
+  hytopia.onData = function(callback) {
+    originalOnData.call(this, (data) => {
+      console.log('Received data from server:', data);
+      callback(data);
     });
+  };
+</script>
+
+
+
+<!-- Game UI -->
+
+<div id="gameUI">
+  <div class="score-container">
+    <div class="score-box">
+      <div class="score-label">Energy Absorbed</div>
+      <div class="score-value" id="currentScore">0</div>
+    </div>
+    <div class="score-box">
+      <div class="score-label">Top Score</div>
+      <div class="score-value" id="topScore">0</div>
+    </div>
+  </div>
+
+  <div class="leaderboards-container">
+    <div class="leaderboard-box">
+      <div class="leaderboard-title">Last Shift Leaders</div>
+      <div id="lastShiftLeaders" class="leaderboard-list"></div>
+    </div>
+    <div class="leaderboard-box">
+      <div class="leaderboard-title">All Time Leaders</div>
+      <div id="allTimeLeaders" class="leaderboard-list"></div>
+    </div>
+  </div>
+
+  <div class="heat-container">
+    <div class="heat-label">Heat Level</div>
+    <div class="heat-bar-wrapper">
+      <div id="heatBar" class="heat-bar"></div>
+    </div>
+  </div>
+
+  <div id="countdownMessage" class="countdown-message"></div>
+  <div id="lavaOverlay" class="lava-overlay"></div>
+</div>
+
+<!-- Super Charge UI -->
+
+<div id="superChargeUI">
+  <div id="superChargePrompt">Press F to Super Charge your Energy</div>
+  <div id="chargeBar">
+    <div class="charge-fill"></div>
+  </div>
+</div>
+
+<!-- Join NPC and Queue Messages -->
+
+<template id="join-npc-message">
+  <div class="join-npc-message">
+    <h1>Join the Next Shift!</h1>
+    <p>Come close to me to grab your gear</p>
+    <p class="controls">(WASD to move, Spacebar to jump)</p>
+  </div>
+</template>
+
+<template id="player-queued">
+  <div class="queued-message">
+    <p style="color: #00FF00;">Ready for next shift!</p>
+  </div>
+</template>
+
+<style>
+
+  /* Welcome Screen Styles */
+
+  .welcome-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+  }
+
+  .welcome-content {
+    background: rgba(50, 50, 50, 0.95);
+    padding: 40px;
+    border-radius: 15px;
+    text-align: center;
+    color: #fff;
+    border: 2px solid #ff6600;
+    max-width: 500px;
+    pointer-events: none;
+  }
+
+  .welcome-content h1 {
+    color: #ff6600;
+    margin-bottom: 20px;
+    font-size: 32px;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+
+  .welcome-content p {
+    margin-bottom: 30px;
+    line-height: 1.6;
+    font-size: 18px;
+    color: #eee;
+  }
+
+  .name-input-container {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+  }
+
+  .name-input-container input {
+    padding: 12px 20px;
+    border-radius: 8px;
+    border: 2px solid #ff6600;
+    background: rgba(0, 0, 0, 0.3);
+    color: white;
+    width: 250px;
+    text-align: center;
+    font-size: 18px;
+    pointer-events: auto;
+  }
+
+  /* Game UI Styles */
+
+  .score-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .score-box {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px 20px;
+    border-radius: 10px;
+    text-align: right;
+  }
+
+  .score-label {
+    color: #ff6600;
+    font-size: 16px;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+  }
+
+  .score-value {
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+  }
+
+  .leaderboards-container {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .leaderboard-box {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 15px;
+    border-radius: 10px;
+    min-width: 200px;
+  }
+
+  .leaderboard-title {
+    color: #ff6600;
+    font-size: 16px;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    text-align: center;
+  }
+
+  .leaderboard-list {
+    color: white;
+  }
+
+  .leaderboard-entry {
+    display: flex;
+    justify-content: space-between;
+    margin: 5px 0;
+    font-size: 14px;
+  }
+
+  .leaderboard-entry .name {
+    margin-right: 10px;
+  }
+
+  .leaderboard-entry .score {
+    color: #ff6600;
+  }
+
+  .heat-container {
+    position: fixed;
+    bottom: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 60%;
+    max-width: 600px;
+    text-align: center;
+  }
+
+  .heat-label {
+    color: #ff6600;
+    font-size: 16px;
+    text-transform: uppercase;
+    margin-bottom: 5px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  }
+
+  .heat-bar-wrapper {
+    width: 100%;
+    height: 20px;
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 10px;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+  }
+
+  .heat-bar {
+    width: 0%;
+    height: 100%;
+    background-color: #ffaa00;
+    transition: width 0.3s ease-out;
+  }
+
+  .countdown-message {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 20px 30px;
+    border-radius: 12px;
+    font-size: 24px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.5s;
+    z-index: 1001;
+    pointer-events: none;
+  }
+
+  .countdown-message.visible {
+    opacity: 1;
+  }
+
+  .countdown-message.fade-out {
+    opacity: 0;
+  }
+
+  .lava-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: red;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+  }
+
+  .join-npc-message {
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 12px;
+    padding: 12px 20px;
+    color: white;
+    text-align: center;
+    position: relative;
+    margin-bottom: 15px;
+    pointer-events: none;
+  }
+
+  .join-npc-message:after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 10px solid rgba(0, 0, 0, 0.8);
+  }
+
+  .join-npc-message h1 {
+    font-size: 24px;
+    color: #ff6600;
+    margin: 0 0 8px 0;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+
+  .join-npc-message p {
+    font-size: 16px;
+    margin: 0;
+    line-height: 1.4;
+  }
+
+  .join-npc-message .controls {
+    color: #ccc;
+    margin-top: 8px;
+    font-size: 14px;
+  }
+
+  /* Super Charge UI Styles */
+
+  #superChargeUI {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    z-index: 9999;
+    pointer-events: none;
+    width: 100%;
+  }
   
-    hytopia.registerSceneUITemplate('player-queued', () => {
-      return document.getElementById('player-queued').content.cloneNode(true);
-    });
-  </script>
+  #superChargePrompt {
+    color: white;
+    font-size: 20px;
+    margin: 0 auto 15px;
+    background: rgba(0,0,0,0.7);
+    padding: 10px 20px;
+    border-radius: 5px;
+    border: 2px solid white;
+    display: inline-block;
+  }
+  
+  #chargeBar {
+    width: 200px;
+    height: 10px;
+    background: rgba(255,255,255,0.3);
+    border: 2px solid white;
+    border-radius: 5px;
+    overflow: hidden;
+    display: none;
+    margin: 0 auto;
+  }
+  
+  .charge-fill {
+    width: 0%;
+    height: 100%;
+    background: white;
+    border-radius: 3px;
+    transition: width 0.1s linear;
+  }
+
+  /* Join NPC and Queue Message Styles */
+
+  .queued-message {
+    background: rgba(0, 0, 0, 0.8);
+    border-radius: 12px;
+    padding: 12px 20px;
+    color: white;
+    text-align: center;
+    position: relative;
+    margin-bottom: 15px;
+    pointer-events: none;
+  }
+
+  /* Add highlighting for current player in leaderboard */
+  .leaderboard-entry.current-player {
+    background: rgba(255, 102, 0, 0.3);
+    border-radius: 4px;
+    padding: 2px 5px;
+  }
+</style>
   
   
   
