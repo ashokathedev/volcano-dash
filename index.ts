@@ -29,27 +29,27 @@ if (!global.playerNames) {
   global.playerNames = {};
 }
 
-import worldMap from './assets/maps/boilerplate.json';
+import worldMap from './assets/maps/terrain.json';
 
 // Game Config
 
   const GAME_CONFIG = {
     START_DELAY: 15,
     POSITIONS: {
-      ARENA: { x: 6, y: 20, z: 6 }, // Arena Spawn Point
+      ARENA: { x: 14, y: 5, z: -12}, // Arena Spawn Point
       JOIN_NPC: { x: -20, y: 5, z: 4 }, // Join NPC Spawn Point
       LOBBY: { x: 0, y: 4, z: 0 }, // Lobby ReSpawn Point
       GAME_JOIN: { x: -33, y: 4, z: 1 }, // Game Join Spawn Point
     },
     SUPER_CHARGES: [
-      { id: 'charge1', position: { x: 10, y: 2, z: 10 } },
+      { id: 'charge1', position: { x: 15, y: 7, z: 10 } },
       { id: 'charge2', position: { x: -10, y: 2, z: -10 } },
       { id: 'charge3', position: { x: 15, y: 2, z: -15 } }
     ],
     HEAT_CLUSTERS: [
-      { id: 'cluster1', position: { x: 8, y: 2, z: 8 } },
-      { id: 'cluster2', position: { x: -8, y: 2, z: -8 } },
-      { id: 'cluster3', position: { x: 12, y: 2, z: -12 } }
+      { id: 'cluster1', position: { x: 15, y: 8, z: -4 } }, // Level A Front
+      { id: 'cluster2', position: { x: 15, y: 8, z: -22 } }, // Level A Back
+      { id: 'cluster3', position: { x: 0, y: 2, z: 0 } } 
     ]
   };
 
@@ -120,12 +120,17 @@ let playerCount = 0; // Number of players in the game
 
 // LAVA ARENA VARIABLES **************************************************************************************
 
-const lavaStartX = 8;
-const lavaStartZ = 8;
-const lavaY = -10;
+const lavaStartX = 14;
+const lavaStartZ = -14;
+const lavaY = -12;
 const lavaMaxHeight = 5;
-const lavaRiseSpeed = 1750; // 1000ms = 1 second
+const lavaRiseSpeed = 2000; // 1000ms = 1 second
 let currentFillHeight = lavaY;
+
+// Add these new variables
+const LAVA_HALF_EXTENT_X = 11;
+const LAVA_HALF_EXTENT_Y = 12;
+const LAVA_HALF_EXTENT_Z = 11;
 
 //let inLava = false;
 
@@ -271,20 +276,28 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
             if (other instanceof PlayerEntity) {
               const playerId = other.id!;
               
+              // Initialize multiplier if needed
+              if (!playerScoreMultipliers[playerId]) {
+                playerScoreMultipliers[playerId] = 1;
+              }
+
               if (started) {
-                // Player entered heat cluster zone
-                playerScoreMultipliers[playerId] = (playerScoreMultipliers[playerId] || 1) * 10;
+                console.log(`Player ${playerId} entered heat cluster. Setting multiplier to 10`);
+                playerScoreMultipliers[playerId] = 10;
                 other.player.ui.sendData({
                   type: 'multiplierActive',
-                  multiplier: playerScoreMultipliers[playerId]
+                  multiplier: 10
                 });
               } else {
-                // Player left heat cluster zone
-                playerScoreMultipliers[playerId] = playerScoreMultipliers[playerId] / 10;
+                console.log(`Player ${playerId} left heat cluster. Resetting multiplier to 1`);
+                playerScoreMultipliers[playerId] = 1;
                 other.player.ui.sendData({
                   type: 'multiplierInactive'
                 });
               }
+              
+              // Debug log current multiplier
+              console.log(`Current multiplier for player ${playerId}: ${playerScoreMultipliers[playerId]}`);
             }
           }
         }
@@ -393,7 +406,6 @@ function spawnSuperCharge(world: World, position: { x: number, y: number, z: num
 
               if (started) {
                 if (playerSuperChargesUsed[playerId].has(chargeId)) {
-                  // If already used, show message and don't setup charging
                   playerEntity.player.ui.sendData({
                     type: 'superChargeState',
                     state: 'alreadyUsed'
@@ -409,9 +421,11 @@ function spawnSuperCharge(world: World, position: { x: number, y: number, z: num
 
                 let isCharging = false;
                 let chargeInterval: NodeJS.Timer | null = null;
+                let lastInputHadF = false;
                 
                 playerEntity.controller!.onTickWithPlayerInput = (entity, input) => {
                   if (input.f && !isCharging && !playerSuperChargesUsed[playerId].has(chargeId)) {
+                    // Start charging when F is first pressed
                     console.log('F pressed, starting charge');
                     isCharging = true;
                     let chargeTime = 0;
@@ -442,11 +456,24 @@ function spawnSuperCharge(world: World, position: { x: number, y: number, z: num
                           state: 'complete'
                         });
                         
-                        // Remove the input handler after completion
                         playerEntity.controller!.onTickWithPlayerInput = undefined;
                       }
                     }, 100);
+                  } else if (!input.f && isCharging) {
+                    // Reset if F is released during charging
+                    console.log('F released, resetting charge');
+                    if (chargeInterval) {
+                      clearInterval(chargeInterval);
+                      chargeInterval = null;
+                    }
+                    isCharging = false;
+                    
+                    playerEntity.player.ui.sendData({
+                      type: 'superChargeState',
+                      state: 'reset'
+                    });
                   }
+                  lastInputHadF = input.f === true;
                 };
               } else {
                 console.log('Sending exit state');
@@ -495,7 +522,9 @@ function startGame (world: World) {
 
   // Reset player score to 0
   ACTIVE_PLAYERS.forEach(playerEntity => {
-    playerScore[playerEntity.id!] = 0;
+    const playerId = playerEntity.id!;
+    playerScore[playerId] = 0;
+    playerScoreMultipliers[playerId] = 1; // Reset multiplier at game start
   });
 
  // console.log("Starting game with players:", ACTIVE_PLAYERS.size); // Debug log
@@ -525,26 +554,26 @@ function startGame (world: World) {
   updateChamberHeat();
 
   function updateScore() {
-   // console.log("Score update started"); // Debug log
-    const scoreIntervaltoClear = setInterval(() => {
-     // console.log("Interval triggered"); // Debug log
-     // console.log("Active players:", ACTIVE_PLAYERS.size); // Check if we have active players
-      
-      if (ACTIVE_PLAYERS.size > 0 && gameState === 'inProgress') {  // Only update if game is in progress
-        ACTIVE_PLAYERS.forEach(playerEntity => {
-          const playerId = playerEntity.id!;
-          if (!playerScore[playerId]) {
-            playerScore[playerId] = 0;
-          }
-          // Apply the player's current multiplier
-          const multiplier = playerScoreMultipliers[playerId] || 1;
-          playerScore[playerId] += scoreRate * multiplier;
-         // console.log(`Current Score for ${playerEntity.player.username}: ${playerScore[playerEntity.id!]}`);
-        });
-      } else {
-        clearInterval(scoreIntervaltoClear);
-      }
-    }, scoreInterval);
+   const scoreIntervaltoClear = setInterval(() => {
+     if (ACTIVE_PLAYERS.size > 0 && gameState === 'inProgress') {
+       ACTIVE_PLAYERS.forEach(playerEntity => {
+         const playerId = playerEntity.id!;
+         if (!playerScore[playerId]) {
+           playerScore[playerId] = 0;
+         }
+         if (!playerScoreMultipliers[playerId]) {
+           playerScoreMultipliers[playerId] = 1;
+         }
+         
+         // Add debug log for score updates
+         const scoreIncrease = scoreRate * playerScoreMultipliers[playerId];
+         playerScore[playerId] += scoreIncrease;
+         console.log(`Player ${playerId} score update: +${scoreIncrease} (multiplier: ${playerScoreMultipliers[playerId]})`);
+       });
+     } else {
+       clearInterval(scoreIntervaltoClear);
+     }
+   }, scoreInterval);
   }
 
   // RISING LAVA  ***********************************************************************************************************************
@@ -553,14 +582,22 @@ function startGame (world: World) {
 
  const risingLava = new Entity({
    blockTextureUri: 'blocks/lava/lava.png',
-   blockHalfExtents: { x: 6, y: 12, z: 6 },
+   blockHalfExtents: { 
+     x: LAVA_HALF_EXTENT_X, 
+     y: LAVA_HALF_EXTENT_Y, 
+     z: LAVA_HALF_EXTENT_Z 
+   },
    rigidBodyOptions: {
      type: RigidBodyType.KINEMATIC_VELOCITY,
      linearVelocity: { x: 0, y: 0.5, z: 0 },
      colliders: [
        {
          shape: ColliderShape.BLOCK,
-         halfExtents: { x: 6, y: 12, z: 6 },
+         halfExtents: { 
+           x: LAVA_HALF_EXTENT_X, 
+           y: LAVA_HALF_EXTENT_Y, 
+           z: LAVA_HALF_EXTENT_Z 
+         },
          isSensor: true,
        },
      ],
@@ -622,7 +659,7 @@ risingLava.onEntityCollision = (risingLava: Entity, other: Entity, started: bool
 
 // Spawn Rising Lava Platform
 
-risingLava.spawn(world, { x: lavaStartX, y: lavaY, z: lavaStartZ });
+risingLava.spawn(world, { x: lavaStartX+1, y: lavaY, z: lavaStartZ+1 });
 
   GAME_CONFIG.SUPER_CHARGES.forEach(charge => {
     spawnSuperCharge(world, charge.position, charge.id);
@@ -807,6 +844,171 @@ function endGame(world: World) {
       });
     });
   }
+
+  
+
+  // Course Platforms **************************************************************************************
+
+  // Level A Course Platforms ***********************************************
+
+  const lvlAheight = 2;
+  const lvlA = [
+    // Ground level (y=lvlAheight)
+    [1,lvlAheight,1,107], [1,lvlAheight,0,107], [0,lvlAheight,0,107], [0,lvlAheight,1,107],
+    [2,lvlAheight,2,106], [2,lvlAheight,1,106], [2,lvlAheight,0,106], [2,lvlAheight,-1,106], [1,lvlAheight,-1,106], [0,lvlAheight,-1,106],
+    [-1,lvlAheight,-1,106], [-1,lvlAheight,0,106], [-1,lvlAheight,1,106], [-1,lvlAheight,2,106], [0,lvlAheight,2,106], [1,lvlAheight,2,106],
+    [3,lvlAheight,3,104], [3,lvlAheight,2,104], [3,lvlAheight,1,104], [3,lvlAheight,0,104], [3,lvlAheight,-1,104], [3,lvlAheight,-2,104],
+    [2,lvlAheight,-2,104], [1,lvlAheight,-2,104], [0,lvlAheight,-2,104], [-1,lvlAheight,-2,104], [-2,lvlAheight,-2,104],
+    [2,lvlAheight,3,104], [1,lvlAheight,3,104], [0,lvlAheight,3,104], [-1,lvlAheight,3,104], [-2,lvlAheight,3,104],
+    [-2,lvlAheight,2,104], [-2,lvlAheight,1,104], [-2,lvlAheight,0,104], [-2,lvlAheight,-1,104],
+    [5,lvlAheight,-5,104], [6,lvlAheight,-5,104], [9,lvlAheight,-5,104], [10,lvlAheight,-5,104],
+    [10,lvlAheight,2,104], [10,lvlAheight,1,104], [10,lvlAheight,0,104], [10,lvlAheight,-1,104],
+    [9,lvlAheight,2,104], [9,lvlAheight,1,104], [9,lvlAheight,0,104], [9,lvlAheight,-1,104],
+    [6,lvlAheight,5,104], [6,lvlAheight,7,104], [6,lvlAheight,6,104], [7,lvlAheight,6,104],
+    [7,lvlAheight,5,104], [5,lvlAheight,5,104], [5,lvlAheight,6,104], [5,lvlAheight,7,104],
+    [1,lvlAheight,10,104], [2,lvlAheight,10,104], [0,lvlAheight,10,104], [-1,lvlAheight,10,104],
+    [2,lvlAheight,9,104], [1,lvlAheight,9,104], [0,lvlAheight,9,104], [-1,lvlAheight,9,104],
+    [-5,lvlAheight,6,104], [-4,lvlAheight,6,104], [-4,lvlAheight,5,104], [-5,lvlAheight,5,104],
+    [-9,lvlAheight,5,104], [-8,lvlAheight,5,104], [-8,lvlAheight,6,104], [-9,lvlAheight,6,104],
+    [-9,lvlAheight,2,104], [-9,lvlAheight,1,104], [-9,lvlAheight,0,104], [-9,lvlAheight,-1,104],
+    [-8,lvlAheight,-1,104], [-8,lvlAheight,0,104], [-8,lvlAheight,1,104], [-8,lvlAheight,2,104],
+    [-6,lvlAheight,-5,104], [-5,lvlAheight,-5,104], [-5,lvlAheight,-6,104], [-4,lvlAheight,-6,104],
+    [-4,lvlAheight,-5,104], [-4,lvlAheight,-4,104], [-5,lvlAheight,-4,104], [-6,lvlAheight,-4,104],
+    [2,lvlAheight,-8,104], [1,lvlAheight,-8,104], [0,lvlAheight,-8,104], [-1,lvlAheight,-8,104],
+    [-1,lvlAheight,-9,104], [0,lvlAheight,-9,104], [1,lvlAheight,-9,104], [2,lvlAheight,-9,104],
+    [5,lvlAheight,-4,104], [6,lvlAheight,-4,104], [9,lvlAheight,-4,104], [10,lvlAheight,-4,104],
+
+    // First layer (y=lvlAheight+1)
+    [-9,lvlAheight+1,-9,107], [-9,lvlAheight+1,-8,107], [-8,lvlAheight+1,-9,107], [-8,lvlAheight+1,-8,107],
+    [-7,lvlAheight+1,-9,107], [-7,lvlAheight+1,-8,107], [-9,lvlAheight+1,-7,107], [-8,lvlAheight+1,-7,107],
+    [-7,lvlAheight+1,-7,107], [9,lvlAheight+1,-9,107], [10,lvlAheight+1,-9,107], [10,lvlAheight+1,-8,107],
+    [9,lvlAheight+1,-8,107], [8,lvlAheight+1,-9,107], [8,lvlAheight+1,-8,107], [8,lvlAheight+1,-7,107],
+    [9,lvlAheight+1,-7,107], [10,lvlAheight+1,-7,107], [9,lvlAheight+1,10,107], [9,lvlAheight+1,9,107],
+    [10,lvlAheight+1,9,107], [10,lvlAheight+1,10,107], [8,lvlAheight+1,10,107], [8,lvlAheight+1,9,107],
+    [10,lvlAheight+1,8,107], [9,lvlAheight+1,8,107], [8,lvlAheight+1,8,107], [-9,lvlAheight+1,9,107],
+    [-8,lvlAheight+1,9,107], [-8,lvlAheight+1,10,107], [-9,lvlAheight+1,10,107], [-7,lvlAheight+1,10,107],
+    [-7,lvlAheight+1,9,107], [-7,lvlAheight+1,8,107], [-9,lvlAheight+1,8,107], [-8,lvlAheight+1,8,107],
+
+    // Second layer (y=lvlAheight+2)
+    [6,lvlAheight+2,-9,101], [6,lvlAheight+2,-8,101], [-5,lvlAheight+2,-9,101], [-5,lvlAheight+2,-8,101],
+    [-5,lvlAheight+2,10,101], [-5,lvlAheight+2,9,101], [6,lvlAheight+2,10,101], [6,lvlAheight+2,9,101],
+
+    // Third layer (y=lvlAheight+3)
+    [5,lvlAheight+3,-9,101], [5,lvlAheight+3,-8,101], [-4,lvlAheight+3,-9,101], [-4,lvlAheight+3,-8,101],
+    [-4,lvlAheight+3,10,101], [-4,lvlAheight+3,9,101], [5,lvlAheight+3,10,101], [5,lvlAheight+3,9,101],
+
+    // Fourth layer (y=lvlAheight+4)
+    [4,lvlAheight+4,-9,101], [4,lvlAheight+4,-8,101], [3,lvlAheight+4,-9,104], [3,lvlAheight+4,-8,104],
+    [2,lvlAheight+4,-8,104], [2,lvlAheight+4,-9,104], [1,lvlAheight+4,-8,101], [0,lvlAheight+4,-8,101],
+    [-1,lvlAheight+4,-8,104], [-1,lvlAheight+4,-9,104], [-2,lvlAheight+4,-8,104], [-2,lvlAheight+4,-9,104],
+    [-3,lvlAheight+4,-8,101], [-3,lvlAheight+4,-9,101], [1,lvlAheight+4,-9,101], [0,lvlAheight+4,-9,101],
+    [1,lvlAheight+4,-3,104], [0,lvlAheight+4,-3,104], [1,lvlAheight+4,-4,104], [0,lvlAheight+4,-4,104],
+    [1,lvlAheight+4,-5,104], [0,lvlAheight+4,-5,104], [1,lvlAheight+4,-6,104], [0,lvlAheight+4,-6,104],
+    [1,lvlAheight+4,-7,104], [0,lvlAheight+4,-7,104], [1,lvlAheight+4,-2,104], [0,lvlAheight+4,-2,104],
+    [1,lvlAheight+4,3,104], [0,lvlAheight+4,3,104], [1,lvlAheight+4,8,104], [0,lvlAheight+4,8,104],
+    [1,lvlAheight+4,7,104], [0,lvlAheight+4,7,104], [1,lvlAheight+4,6,104], [0,lvlAheight+4,6,104],
+    [1,lvlAheight+4,5,104], [0,lvlAheight+4,5,104], [1,lvlAheight+4,4,104], [0,lvlAheight+4,4,104],
+    [0,lvlAheight+4,9,101], [1,lvlAheight+4,9,101], [0,lvlAheight+4,10,101], [1,lvlAheight+4,10,101],
+    [2,lvlAheight+4,9,104], [2,lvlAheight+4,10,104], [3,lvlAheight+4,9,104], [3,lvlAheight+4,10,104],
+    [-1,lvlAheight+4,9,104], [-1,lvlAheight+4,10,104], [-2,lvlAheight+4,9,104], [-2,lvlAheight+4,10,104],
+    [-3,lvlAheight+4,10,101], [-3,lvlAheight+4,9,101], [4,lvlAheight+4,10,101], [4,lvlAheight+4,9,101]
+];
+
+lvlA.forEach(([x, y, z, blockId]) => {
+  world.chunkLattice.setBlock({ 
+    x: lavaStartX + x, 
+    y, 
+    z: lavaStartZ + z 
+  }, blockId);
 });
+
+// Level A Center Moving Platforms ****************************************************************
+
+
+const lvlAMovingPlatform1 = new Entity({
+  blockTextureUri: 'blocks/moltenRock.png', // A texture URI without a file extension will use a folder and look for the textures for each face in the folder (-x.png, +x.png, -y.png, +y.png, -z.png, +z.png)
+  blockHalfExtents: { x: 2, y: 0.5, z: 1 },
+  rigidBodyOptions: {
+    type: RigidBodyType.KINEMATIC_VELOCITY, // Kinematic means platform won't be effected by external physics, including gravity
+    linearVelocity: { x: 3, y: 0, z: 0 }, // A starting velocity that won't change because it's kinematic
+  },
+});
+
+// Clamp the z range the platform moves back and forth between
+lvlAMovingPlatform1.onTick = lvlAMovingPlatform1 => { 
+  const position = lvlAMovingPlatform1.position;
+
+  if (position.x < 15) {
+    lvlAMovingPlatform1.setLinearVelocity({ x: 3, y: 0, z: 0 });
+  }
+
+  if (position.x > 22) {
+    lvlAMovingPlatform1.setLinearVelocity({ x: -3, y: 0, z: 0 });
+  }
+};
+
+lvlAMovingPlatform1.spawn(world, { x: 15, y: 6, z: -14 });
+
+const lvlAMovingPlatform2 = new Entity({
+  blockTextureUri: 'blocks/moltenRock.png', // A texture URI without a file extension will use a folder and look for the textures for each face in the folder (-x.png, +x.png, -y.png, +y.png, -z.png, +z.png)
+  blockHalfExtents: { x: 2, y: 0.5, z: 1 },
+  rigidBodyOptions: {
+    type: RigidBodyType.KINEMATIC_VELOCITY, // Kinematic means platform won't be effected by external physics, including gravity
+    linearVelocity: { x: 3, y: 0, z: 0 }, // A starting velocity that won't change because it's kinematic
+  },
+});
+
+// Clamp the z range the platform moves back and forth between
+lvlAMovingPlatform2.onTick = lvlAMovingPlatform2 => { 
+  const position = lvlAMovingPlatform2.position;
+
+  if (position.x < 8) {
+    lvlAMovingPlatform2.setLinearVelocity({ x: 3, y: 0, z: 0 });
+  }
+
+  if (position.x > 15) {
+    lvlAMovingPlatform2.setLinearVelocity({ x: -3, y: 0, z: 0 });
+  }
+};
+
+lvlAMovingPlatform2.spawn(world, { x: 15, y: 6, z: -12 });
+
+
+    /**
+   * Spawn a block entity as a moving platform
+   */
+    const blockVertPlatform = new Entity({
+      blockTextureUri: 'blocks/moltenRock.png', // A texture URI without a file extension will use a folder and look for the textures for each face in the folder (-x.png, +x.png, -y.png, +y.png, -z.png, +z.png)
+      blockHalfExtents: { x: 1.5, y: 0.5, z: 1.5 },
+      rigidBodyOptions: {
+        type: RigidBodyType.KINEMATIC_VELOCITY, // Kinematic means platform won't be effected by external physics, including gravity
+        linearVelocity: { x: 0, y:3 , z: 0 }, // A starting velocity that won't change because it's kinematic
+      },
+    });
+  
+    // Clamp the z range the platform moves back and forth between
+    blockVertPlatform.onTick = blockVertPlatform => { 
+      const position = blockVertPlatform.position;
+  
+      if (position.y < 2) {
+        blockVertPlatform.setLinearVelocity({ x: 0, y: 3, z: 0 });
+      }
+  
+      if (position.y > 6) {
+        blockVertPlatform.setLinearVelocity({ x: 0, y: -3, z: 0 });
+      }
+    };
+  
+    blockVertPlatform.spawn(world, { x: 22, y: 15, z: -12 });
+
+
+
+
+});
+
+
+
+
+
 
 
