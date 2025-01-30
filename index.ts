@@ -147,8 +147,6 @@ function onPlayerJoin(world: World, player: Player) {
       modelScale: 0.5,
     });
 
-    console.log('Player joined with username:', player.username);
-
     // Spawn the player first so default colliders are created
     playerEntity.spawn(world, GAME_CONFIG.POSITIONS.LOBBY);
 
@@ -223,7 +221,6 @@ function onPlayerJoin(world: World, player: Player) {
         delete playerHeatIntervals[entity.id!];
       }
       if (entity.id !== undefined) {
-        console.log(`Cleaning up player ${entity.id}, name was:`, playerNames[entity.id]);
         delete playerNames[entity.id];
       }
       delete playerScoreMultipliers[entity.id!];
@@ -298,7 +295,6 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
               }
 
               if (started) {
-                console.log(`Player ${playerId} entered heat cluster. Setting multiplier to 10`);
                 playerScoreMultipliers[playerId] = 10;
                 other.player.ui.sendData({
                   type: 'multiplierActive',
@@ -311,7 +307,6 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
                   message: 'Stay in the heat cluster to absorb energy faster'
                 });
               } else {
-                console.log(`Player ${playerId} left heat cluster. Resetting multiplier to 1`);
                 playerScoreMultipliers[playerId] = 1;
                 other.player.ui.sendData({
                   type: 'multiplierInactive'
@@ -322,8 +317,6 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
                   active: false
                 });
               }
-              // Debug log current multiplier
-              console.log(`Current multiplier for player ${playerId}: ${playerScoreMultipliers[playerId]}`);
             }
           }
         }
@@ -369,15 +362,11 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
     gameState = 'starting';
     gameCountdownStartTime = Date.now();
 
-    console.log("Queue game started, countdown beginning..."); // Debug log
-
     // Start countdown updates
     const countdownInterval = setInterval(() => {
       const now = Date.now();
       const timeLeft = GAME_CONFIG.START_DELAY * 1000 - (now - (gameCountdownStartTime || 0));
       const secondsLeft = Math.max(0, Math.ceil(timeLeft / 1000));
-      
-      console.log("Countdown update, seconds left:", secondsLeft); // Debug log
       
       QUEUED_PLAYER_ENTITIES.forEach(playerEntity => {
         playerEntity.player.ui.sendData({
@@ -442,7 +431,6 @@ function spawnSuperCharge(world: World, position: { x: number, y: number, z: num
                   return;
                 }
 
-                console.log('Sending enter state');
                 playerEntity.player.ui.sendData({
                   type: 'superChargeState',
                   state: 'enter'
@@ -455,7 +443,6 @@ function spawnSuperCharge(world: World, position: { x: number, y: number, z: num
                 playerEntity.controller!.onTickWithPlayerInput = (entity, input) => {
                   if (input.f && !isCharging && !playerSuperChargesUsed[playerId].has(chargeId)) {
                     // Start charging when F is first pressed
-                    console.log('F pressed, starting charge');
                     isCharging = true;
                     let chargeTime = 0;
                     
@@ -463,7 +450,6 @@ function spawnSuperCharge(world: World, position: { x: number, y: number, z: num
                       chargeTime += 100;
                       const progress = Math.min((chargeTime / 3000) * 100, 100);
                       
-                      console.log(`Charging: ${progress}%`);
                       playerEntity.player.ui.sendData({
                         type: 'superChargeState',
                         state: 'charging',
@@ -479,7 +465,6 @@ function spawnSuperCharge(world: World, position: { x: number, y: number, z: num
                         playerSuperChargesUsed[playerId].add(chargeId);
                         isCharging = false;
                         
-                        console.log('Charge complete');
                         playerEntity.player.ui.sendData({
                           type: 'superChargeState',
                           state: 'complete'
@@ -490,7 +475,6 @@ function spawnSuperCharge(world: World, position: { x: number, y: number, z: num
                     }, 100);
                   } else if (!input.f && isCharging) {
                     // Reset if F is released during charging
-                    console.log('F released, resetting charge');
                     if (chargeInterval) {
                       clearInterval(chargeInterval);
                       chargeInterval = null;
@@ -505,7 +489,6 @@ function spawnSuperCharge(world: World, position: { x: number, y: number, z: num
                   lastInputHadF = input.f === true;
                 };
               } else {
-                console.log('Sending exit state');
                 if (playerEntity.controller) {
                   playerEntity.controller.onTickWithPlayerInput = undefined;
                 }
@@ -531,12 +514,10 @@ function startGame (world: World) {
   gameState = 'inProgress';
   gameStartTime = Date.now();
 
-  //console.log("Game player entities size:", GAME_PLAYER_ENTITIES.size); // Debug check
 
   // Initialize active players
   GAME_PLAYER_ENTITIES.forEach(playerEntity => {
     ACTIVE_PLAYERS.add(playerEntity);
-   // console.log("Added player to active players:", playerEntity.player.username); // Debug each add
     
     // Reset player state for new game
     playerHeatLevel[playerEntity.id!] = 1;
@@ -547,7 +528,6 @@ function startGame (world: World) {
     }
   });
 
- // console.log("Active players after initialization:", ACTIVE_PLAYERS.size); // Debug final count
 
   // Reset player score to 0
   ACTIVE_PLAYERS.forEach(playerEntity => {
@@ -556,7 +536,6 @@ function startGame (world: World) {
     playerScoreMultipliers[playerId] = 1; // Reset multiplier at game start
   });
 
- // console.log("Starting game with players:", ACTIVE_PLAYERS.size); // Debug log
 
   // Start score accumulation
   updateScore();
@@ -567,7 +546,6 @@ function startGame (world: World) {
       if (ACTIVE_PLAYERS.size > 0 && gameState === 'inProgress') {
         ACTIVE_PLAYERS.forEach(playerEntity => {
           playerHeatLevel[playerEntity.id!] += chamberHeatIncrease;
-          console.log(`Chamber Heat Rising for ${playerEntity.player.username}! Current Heat Level: ${playerHeatLevel[playerEntity.id!]}`);
           
           // Check for overheat
           if (playerHeatLevel[playerEntity.id!] >= maxHeatLevel) {
@@ -597,7 +575,6 @@ function startGame (world: World) {
          // Add debug log for score updates
          const scoreIncrease = scoreRate * playerScoreMultipliers[playerId];
          playerScore[playerId] += scoreIncrease;
-         console.log(`Player ${playerId} score update: +${scoreIncrease} (multiplier: ${playerScoreMultipliers[playerId]})`);
        });
      } else {
        clearInterval(scoreIntervaltoClear);
@@ -654,7 +631,6 @@ risingLava.onEntityCollision = (risingLava: Entity, other: Entity, started: bool
   if (!(other instanceof PlayerEntity)) return;
   
   const playerEntity = other as PlayerEntity;
-  console.log(`Collision event for player ${playerEntity.player.username} (ID: ${playerEntity.id}), started: ${started}`);
 
   // Initialize heat level if needed
   if (!playerHeatLevel[playerEntity.id!]) {
@@ -663,7 +639,6 @@ risingLava.onEntityCollision = (risingLava: Entity, other: Entity, started: bool
 
   // When player enters lava
   if (started) {
-    console.log(`Player ${playerEntity.player.username} entered lava`);
     
     if (playerHeatIntervals[playerEntity.id!]) {
       clearInterval(playerHeatIntervals[playerEntity.id!]);
@@ -673,14 +648,12 @@ risingLava.onEntityCollision = (risingLava: Entity, other: Entity, started: bool
     playerHeatIntervals[playerEntity.id!] = setInterval(() => {
       if (playerInLava[playerEntity.id!] && ACTIVE_PLAYERS.has(playerEntity)) {
         playerHeatLevel[playerEntity.id!] += lavaHeatIncrease;
-        console.log(`Heat Level Rising for ${playerEntity.player.username}! Current Heat Level: ${playerHeatLevel[playerEntity.id!]}`);
       } else {
         clearInterval(playerHeatIntervals[playerEntity.id!]);
         delete playerHeatIntervals[playerEntity.id!];
       }
     }, lavaHeatIncreaseRate);
   } else {
-    console.log(`Player ${playerEntity.player.username} exited lava`);
   }
 
   playerInLava[playerEntity.id!] = started;
@@ -705,17 +678,13 @@ risingLava.spawn(world, { x: lavaStartX+1, y: lavaY, z: lavaStartZ+1 });
 // End Game Function *******************************************************************************************************
 
 function endGame(world: World) {
-  console.log('Game ending, current state:', gameState);
   if (gameState !== 'inProgress') return;
   
   gameState = 'awaitingPlayers';
 
   // Update leaderboards for all active players
   ACTIVE_PLAYERS.forEach(playerEntity => {
-    console.log('Checking player for leaderboard update:', playerEntity.player.username);
-    console.log('Player score:', playerScore[playerEntity.id!]);
     if (playerScore[playerEntity.id!] > 0) {
-      console.log('Calling updateLeaderboards from endGame');
       updateLeaderboards(playerEntity);
     }
   });
@@ -749,12 +718,9 @@ function endGame(world: World) {
   // Update top scores and move players after 10 seconds
   setTimeout(() => {
     ACTIVE_PLAYERS.forEach(playerEntity => {
-      console.log('End game - Current Score:', playerScore[playerEntity.id!]);
-      console.log('End game - Top Score:', playerTopScore[playerEntity.id!]);
       
       if (playerScore[playerEntity.id!] > (playerTopScore[playerEntity.id!] || 0)) {
         playerTopScore[playerEntity.id!] = playerScore[playerEntity.id!];
-        console.log('Updated end game top score to:', playerTopScore[playerEntity.id!]);
       }
 
       // Move player back to lobby
@@ -784,8 +750,7 @@ function endGame(world: World) {
   // PLAYER RESPAWN FUNCTION *************************************************************
 
   function overHeat(playerEntity: PlayerEntity) {
-      console.log('Player overheated:', playerEntity.player.username);
-      console.log('Current score:', playerScore[playerEntity.id!]);
+
       
       // Clear the heat interval if it exists
       if (playerHeatIntervals[playerEntity.id!]) {
@@ -799,12 +764,9 @@ function endGame(world: World) {
       playerInLava[playerEntity.id!] = false;
       ACTIVE_PLAYERS.delete(playerEntity);  // Remove from active players
       
-      console.log('Before update - Current Score:', playerScore[playerEntity.id!]);
-      console.log('Before update - Top Score:', playerTopScore[playerEntity.id!]);
       
       if (playerScore[playerEntity.id!] > (playerTopScore[playerEntity.id!] || 0)) {
           playerTopScore[playerEntity.id!] = playerScore[playerEntity.id!];
-          console.log('Updated top score to:', playerTopScore[playerEntity.id!]);
       }
 
       // Send immediate UI update
@@ -817,7 +779,6 @@ function endGame(world: World) {
       });
 
       if (playerScore[playerEntity.id!] > 0) {
-        console.log('Calling updateLeaderboards from overHeat');
         updateLeaderboards(playerEntity);
       }
   }

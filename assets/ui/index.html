@@ -1,33 +1,13 @@
-<!-- Welcome Screen -->
-
-<!-- <div id="welcomeScreen" class="welcome-screen">
-    <div class="welcome-content">
-      <h1>Welcome to Volcano Dash!</h1>
-      <p>Work shifts absorbing energy from the lava chamber.<br>Be careful not to overheat!</p>
-      <div class="name-input-container">
-        <label for="playerName">Enter your name and press Enter</label>
-        <input type="text" id="playerName" maxlength="20" placeholder="Type name here..." autocomplete="off">
-      </div>
-    </div>
-  </div> -->
-
+<!-- ==================== JavaScript Section ==================== -->
 
 <script>
-  // Add debug logging
-  console.log('UI Script loaded');
-
-  // Add a variable to store the current player's name and ID
-  let currentPlayerName = '';
-  let currentPlayerId = null;
 
   // Single onData handler for all game events
 
   hytopia.onData((data) => {
-    console.log('Received data from server:', data);
 
     // Handle initial state
     if (data.type === 'initialState') {
-      console.log('Received initial state:', data);
       currentPlayerName = data.playerName;
       currentPlayerId = data.playerId;
       updateLeaderboards(data.lastShiftLeaders, data.allTimeLeaders);
@@ -35,7 +15,6 @@
 
     // Handle game start
     if (data.type === 'gameStart') {
-      console.log('Game starting, showing UI');
       const bottomUI = document.querySelector('.bottom-ui-container');
       if (bottomUI) {
         bottomUI.style.display = 'flex';
@@ -44,7 +23,6 @@
 
     // Handle game end
     if (data.type === 'gameEnd') {
-      console.log('Game ending, hiding UI');
       const bottomUI = document.querySelector('.bottom-ui-container');
       if (bottomUI) {
         bottomUI.style.display = 'none';
@@ -53,12 +31,9 @@
 
     // Handle name confirmation
     if (data.type === 'nameSet') {
-      console.log('Name set confirmation received:', data);
       currentPlayerName = data.name;
-      currentPlayerId = data.playerId;
-      
-      // Add confirmation log
-      console.log('Name updated locally to:', currentPlayerName);
+      currentPlayerId = data.playerId;    
+
     }
 
     // Handle player state updates
@@ -186,7 +161,6 @@
 
   // Add a helper function to update leaderboards
   function updateLeaderboards(lastShiftLeaders, allTimeLeaders) {
-    console.log('Updating leaderboards with:', lastShiftLeaders, allTimeLeaders);
     
     const lastShiftList = document.getElementById('lastShiftLeaders');
     const allTimeList = document.getElementById('allTimeLeaders');
@@ -219,20 +193,20 @@
   // Add debug logging
   const originalSendData = hytopia.ui.sendData;
   hytopia.ui.sendData = function(data) {
-    console.log('Sending data to server:', data);
     originalSendData.call(this, data);
   };
 
   const originalOnData = hytopia.onData;
   hytopia.onData = function(callback) {
     originalOnData.call(this, (data) => {
-      console.log('Received data from server:', data);
       callback(data);
     });
   };
 </script>
 
 
+
+<!-- ==================== HTML Section ==================== -->
 
 <!-- Game UI -->
 
@@ -281,7 +255,7 @@
   </div>
 </div>
 
-<!-- Join NPC and Queue Messages -->
+<!-- Templates -->
 
 <template id="join-npc-message">
   <div class="join-npc-message">
@@ -297,6 +271,10 @@
   </div>
 </template>
 
+<!-- Heat Cluster Notification -->
+<div id="heatClusterNotification" class="heat-cluster-notification"></div>
+
+<!-- ==================== CSS Section ==================== -->
 <style>
 
   /* Welcome Screen Styles */
@@ -649,9 +627,6 @@
     opacity: 1;
   }
 </style>
-
-<!-- Add this somewhere in your body tag -->
-<div id="heatClusterNotification" class="heat-cluster-notification"></div>
   
   
   
