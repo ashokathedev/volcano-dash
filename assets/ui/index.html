@@ -108,7 +108,7 @@
         case 'enter':
           superChargeUI.style.display = 'block';
           chargeBar.style.display = 'none';
-          superChargePrompt.textContent = 'Hold F to Super Charge your Energy';
+          superChargePrompt.textContent = 'Hold F to super charge your energy!';
           break;
           
         case 'charging':
@@ -154,6 +154,17 @@
 
     if (data.type === 'updateLeaderboards') {
       updateLeaderboards(data.lastShiftLeaders, data.allTimeLeaders);
+    }
+
+    if (data.type === 'heatClusterStatus') {
+      const notification = document.getElementById('heatClusterNotification');
+      
+      if (data.active) {
+        notification.textContent = data.message;
+        notification.classList.add('active');
+      } else {
+        notification.classList.remove('active');
+      }
     }
   });
 
@@ -615,7 +626,32 @@
     border-radius: 4px;
     padding: 2px 5px;
   }
+
+  .heat-cluster-notification {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    font-size: 20px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    background: rgba(0,0,0,0.7);
+    padding: 10px 20px;
+    border-radius: 5px;
+    border: 2px solid white;
+    display: inline-block;
+  }
+
+  .heat-cluster-notification.active {
+    opacity: 1;
+  }
 </style>
+
+<!-- Add this somewhere in your body tag -->
+<div id="heatClusterNotification" class="heat-cluster-notification"></div>
   
   
   

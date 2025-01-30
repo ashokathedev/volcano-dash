@@ -19,6 +19,7 @@ import {
   PlayerCamera,
   PlayerCameraMode,
   SceneUIManager,
+  Quaternion,
 } from 'hytopia';
 
 // Declare playerNames at the very top, before any other code
@@ -47,8 +48,8 @@ import worldMap from './assets/maps/terrain.json';
       { id: 'charge3', position: { x: 15, y: 2, z: -15 } }
     ],
     HEAT_CLUSTERS: [
-      { id: 'cluster1', position: { x: 15, y: 8, z: -4 } }, // Level A Front
-      { id: 'cluster2', position: { x: 15, y: 8, z: -22 } }, // Level A Back
+      { id: 'cluster1', position: { x: 15, y: 9, z: -4 } }, // Level A Front
+      { id: 'cluster2', position: { x: 15, y: 9, z: -22 } }, // Level A Back
       { id: 'cluster3', position: { x: 0, y: 2, z: 0 } } 
     ]
   };
@@ -141,12 +142,34 @@ function onPlayerJoin(world: World, player: Player) {
     const playerEntity = new PlayerEntity({
       player,
       name: 'Player',
-      modelUri: 'models/players/player.gltf',
+      modelUri: 'models/volcano-dash/gameJamPlayer.gltf',
       modelLoopedAnimations: ['idle'],
       modelScale: 0.5,
     });
 
     console.log('Player joined with username:', player.username);
+
+    // Spawn the player first so default colliders are created
+    playerEntity.spawn(world, GAME_CONFIG.POSITIONS.LOBBY);
+
+    // Set collision groups to prevent player-to-player collisions
+    playerEntity.setCollisionGroupsForSolidColliders({
+      belongsTo: [CollisionGroup.PLAYER],
+      collidesWith: [
+        CollisionGroup.BLOCK,
+        CollisionGroup.ENTITY,
+        CollisionGroup.ENTITY_SENSOR
+      ],
+    });
+
+    // Update sensor colliders to prevent interference from other players
+    playerEntity.setCollisionGroupsForSensorColliders({
+      belongsTo: [CollisionGroup.ENTITY_SENSOR],
+      collidesWith: [
+        CollisionGroup.BLOCK,
+        CollisionGroup.ENTITY
+      ],
+    });
 
     // Update the interval that sends player state
     const stateInterval = setInterval(() => {
@@ -161,7 +184,7 @@ function onPlayerJoin(world: World, player: Player) {
         inLava: playerInLava[playerEntity.id] ?? false,
         score: playerScore[playerEntity.id] ?? 0,
         topScore: playerTopScore[playerEntity.id] ?? 0,
-        playerName: player.username, // Use the built-in username
+        playerName: player.username,
         playerId: playerEntity.id,
         lastShiftLeaders,
         allTimeLeaders
@@ -172,28 +195,21 @@ function onPlayerJoin(world: World, player: Player) {
     player.ui.load('ui/index.html');
 
     // Setup a first person camera for the player
-  
-    player.camera.setMode(PlayerCameraMode.FIRST_PERSON); // set first person mode 
-    player.camera.setOffset({ x: 0, y: 0.4, z: 0 }); // shift camera up on Y axis so we see from "head" perspective. 
-    player.camera.setModelHiddenNodes(['head', 'neck']); // hide the head node from the model so we don't see it in the camera
-    player.camera.setForwardOffset(0.3); // Shift the camera forward so we are looking slightly in front of player
-  
+    player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
+    player.camera.setOffset({ x: 0, y: 0.4, z: 0 });
+    player.camera.setModelHiddenNodes(['head', 'neck']);
+    player.camera.setForwardOffset(0.3);
 
-     // Increment player count
-
+    // Increment player count
     playerCount++;
 
     // Respawn player at heatLevel max
-
     playerEntity.onTick = () => {
       if (playerHeatLevel[playerEntity.id!] >= maxHeatLevel) {
         overHeat(playerEntity);
       }
     };
-
-    // Spawn to lobby
-    playerEntity.spawn(world, GAME_CONFIG.POSITIONS.LOBBY);
-  }
+}
 
   //   * Despawn the player's entity and perform any other + cleanup when they leave the game. 
   function onPlayerLeave(world: World, player: Player) {
@@ -249,11 +265,11 @@ function onPlayerJoin(world: World, player: Player) {
   
     const npcMessageUI = new SceneUI({
       templateId: 'join-npc-message',
-        attachedToEntity: joinNpc,
-       offset: { x: 0, y: 2.5, z: 0 },
-     });
+      attachedToEntity: joinNpc,
+      offset: { x: 0, y: 2.5, z: 0 },
+    });
    
-     npcMessageUI.load(world);
+    npcMessageUI.load(world);
   }
 
   // Heat Cluster ***************************************************************
@@ -261,9 +277,9 @@ function onPlayerJoin(world: World, player: Player) {
 function spawnHeatCluster(world: World, position: { x: number, y: number, z: number }, clusterId: string) {
   const heatCluster = new Entity({
     name: 'Heat Cluster',
-    modelUri: 'models/structures/jump-pad.gltf',
+    modelUri: 'models/projectiles/energy-orb-projectile.gltf',
     modelLoopedAnimations: ['idle'],
-    modelScale: 1,
+    modelScale: 1.5,
     rigidBodyOptions: {
       type: RigidBodyType.KINEMATIC_POSITION,
       colliders: [
@@ -288,14 +304,24 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
                   type: 'multiplierActive',
                   multiplier: 10
                 });
+                // Send heat cluster notification
+                other.player.ui.sendData({
+                  type: 'heatClusterStatus',
+                  active: true,
+                  message: 'Stay in the heat cluster to absorb energy faster'
+                });
               } else {
                 console.log(`Player ${playerId} left heat cluster. Resetting multiplier to 1`);
                 playerScoreMultipliers[playerId] = 1;
                 other.player.ui.sendData({
                   type: 'multiplierInactive'
                 });
+                // Clear heat cluster notification
+                other.player.ui.sendData({
+                  type: 'heatClusterStatus',
+                  active: false
+                });
               }
-              
               // Debug log current multiplier
               console.log(`Current multiplier for player ${playerId}: ${playerScoreMultipliers[playerId]}`);
             }
@@ -306,6 +332,9 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
   });
 
   heatCluster.spawn(world, position);
+  
+  // Maxed out red while keeping green high for brightness
+  heatCluster.setTintColor({ r: 255, g: 100, b: 0 });
 
   const heatClusterUI = new SceneUI({
     templateId: 'heatCluster',
@@ -320,7 +349,7 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
     if (QUEUED_PLAYER_ENTITIES.has(playerEntity)) return;
     
     QUEUED_PLAYER_ENTITIES.add(playerEntity);
-    //console.log("Player added to queue. Queue size:", QUEUED_PLAYER_ENTITIES.size); // Debug log
+    
     world.chatManager.sendPlayerMessage(playerEntity.player, 'You have joined the next game queue!', '00FF00');
   
     if (gameState === 'awaitingPlayers' && QUEUED_PLAYER_ENTITIES.size >= 1) {
@@ -384,9 +413,9 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
 function spawnSuperCharge(world: World, position: { x: number, y: number, z: number }, chargeId: string) {
   const superCharge = new Entity({
     name: 'Super Charge',
-    modelUri: 'models/items/clock.gltf',
+    modelUri: 'models/volcano-dash/superChargeStation.gltf',
     modelLoopedAnimations: ['idle'],
-    modelScale: 0.8,
+    modelScale: 0.3,
     rigidBodyOptions: {
       type: RigidBodyType.KINEMATIC_POSITION,
       colliders: [
@@ -1000,9 +1029,6 @@ lvlAMovingPlatform2.spawn(world, { x: 15, y: 6, z: -12 });
     };
   
     blockVertPlatform.spawn(world, { x: 22, y: 15, z: -12 });
-
-
-
 
 });
 
