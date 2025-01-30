@@ -20,6 +20,7 @@ import {
   PlayerCameraMode,
   SceneUIManager,
   Quaternion,
+  PlayerUI,
 } from 'hytopia';
 
 // Declare playerNames at the very top, before any other code
@@ -77,6 +78,12 @@ const superChargeProgresses: Record<string, number> = {};
 // Add these to track both leaderboard types
 const lastShiftLeaders: Array<{name: string, score: number}> = [];
 const allTimeLeaders: Array<{name: string, score: number}> = [];
+
+// Add new state tracking variables at the top with other game state
+const INITIAL_TELEPORT_CHARGES = 3; // Number of teleport charges each player starts with
+let playerTeleportCharges: Record<number, number> = {}; // Track charges per player
+let playerPartners: Record<number, number> = {}; // Track player partnerships (playerId -> partnerId)
+let playerPartnerSelections: Record<number, Set<number>> = {}; // Track pending partner selections during countdown
 
 startServer(world => {
   
@@ -139,74 +146,160 @@ const LAVA_HALF_EXTENT_Z = 11;
 // Player Functions **************************************************************************************
 
 function onPlayerJoin(world: World, player: Player) {
-    const playerEntity = new PlayerEntity({
-      player,
-      name: 'Player',
-      modelUri: 'models/volcano-dash/gameJamPlayer.gltf',
-      modelLoopedAnimations: ['idle'],
-      modelScale: 0.5,
-    });
+  const playerEntity = new PlayerEntity({
+    player,
+    name: 'Player',
+    modelUri: 'models/volcano-dash/gameJamPlayer.gltf',
+    modelLoopedAnimations: ['idle'],
+    modelScale: 0.5,
+  });
 
-    // Spawn the player first so default colliders are created
-    playerEntity.spawn(world, GAME_CONFIG.POSITIONS.LOBBY);
+  // Spawn the player first so the ID is assigned
+  playerEntity.spawn(world, GAME_CONFIG.POSITIONS.LOBBY);
 
-    // Set collision groups to prevent player-to-player collisions
-    playerEntity.setCollisionGroupsForSolidColliders({
-      belongsTo: [CollisionGroup.PLAYER],
-      collidesWith: [
-        CollisionGroup.BLOCK,
-        CollisionGroup.ENTITY,
-        CollisionGroup.ENTITY_SENSOR
-      ],
-    });
+  // Initialize teleport charges AFTER spawn to ensure we have an ID
+  playerTeleportCharges[playerEntity.id!] = INITIAL_TELEPORT_CHARGES;
+  console.log('Initial teleport charges set for player:', playerEntity.id!, playerTeleportCharges[playerEntity.id!]);
 
-    // Update sensor colliders to prevent interference from other players
-    playerEntity.setCollisionGroupsForSensorColliders({
-      belongsTo: [CollisionGroup.ENTITY_SENSOR],
-      collidesWith: [
-        CollisionGroup.BLOCK,
-        CollisionGroup.ENTITY
-      ],
-    });
+  // Update the interval that sends player state
+  const stateInterval = setInterval(() => {
+    if (!playerEntity.isSpawned || !playerEntity.id) {
+      clearInterval(stateInterval);
+      return;
+    }
 
-    // Update the interval that sends player state
-    const stateInterval = setInterval(() => {
-      if (!playerEntity.isSpawned || !playerEntity.id) {
-        clearInterval(stateInterval);
-        return;
-      }
+    const playerId = playerEntity.id!;
 
-      player.ui.sendData({
-        type: 'updatePlayerState',
-        heatLevel: playerHeatLevel[playerEntity.id] ?? 1,
-        inLava: playerInLava[playerEntity.id] ?? false,
-        score: playerScore[playerEntity.id] ?? 0,
-        topScore: playerTopScore[playerEntity.id] ?? 0,
-        playerName: player.username,
-        playerId: playerEntity.id,
-        lastShiftLeaders,
-        allTimeLeaders
-      });
-    }, 100);
-
-    // Load the UI
-    player.ui.load('ui/index.html');
-
-    // Setup a first person camera for the player
-    player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
-    player.camera.setOffset({ x: 0, y: 0.4, z: 0 });
-    player.camera.setModelHiddenNodes(['head', 'neck']);
-    player.camera.setForwardOffset(0.3);
-
-    // Increment player count
-    playerCount++;
-
-    // Respawn player at heatLevel max
-    playerEntity.onTick = () => {
-      if (playerHeatLevel[playerEntity.id!] >= maxHeatLevel) {
-        overHeat(playerEntity);
-      }
+    const stateUpdate = {
+      type: 'updatePlayerState',
+      heatLevel: playerHeatLevel[playerId] ?? 1,
+      inLava: playerInLava[playerId] ?? false,
+      score: playerScore[playerId] ?? 0,
+      topScore: playerTopScore[playerId] ?? 0,
+      playerName: player.username,
+      playerId: playerId,
+      lastShiftLeaders,
+      allTimeLeaders,
+      teleportCharges: playerTeleportCharges[playerId],
     };
+    
+    player.ui.sendData(stateUpdate);
+  }, 100);
+
+  // Set collision groups to prevent player-to-player collisions
+  playerEntity.setCollisionGroupsForSolidColliders({
+    belongsTo: [CollisionGroup.PLAYER],
+    collidesWith: [
+      CollisionGroup.BLOCK,
+      CollisionGroup.ENTITY,
+      CollisionGroup.ENTITY_SENSOR
+    ],
+  });
+
+  // Update sensor colliders to prevent interference from other players
+  playerEntity.setCollisionGroupsForSensorColliders({
+    belongsTo: [CollisionGroup.ENTITY_SENSOR],
+    collidesWith: [
+      CollisionGroup.BLOCK,
+      CollisionGroup.ENTITY
+    ],
+  });
+
+  // Load the UI
+  player.ui.load('ui/index.html');
+
+  // Setup a first person camera for the player
+  player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
+  player.camera.setOffset({ x: 0, y: 0.4, z: 0 });
+  player.camera.setModelHiddenNodes(['head', 'neck']);
+  player.camera.setForwardOffset(0.3);
+
+  // Increment player count
+  playerCount++;
+
+  // Respawn player at heatLevel max
+  playerEntity.onTick = () => {
+    if (playerHeatLevel[playerEntity.id!] >= maxHeatLevel) {
+      overHeat(playerEntity);
+    }
+  };
+
+  player.ui.onData = (playerUI: PlayerUI, data: object) => {
+    // Add initial debug log
+    console.log('Received UI data:', data);
+
+    if ('type' in data && 
+        data.type === 'selectPartner' && 
+        'partnerId' in data && 
+        typeof data.partnerId === 'number') {
+      
+      console.log(`Player attempting to select partner. Player: ${player.username}, Selected Partner ID: ${data.partnerId}`);
+      
+      const playerEntity = world.entityManager.getAllPlayerEntities()
+        .find((e: PlayerEntity) => e.player === player);
+        
+      if (playerEntity && playerEntity.id) {
+        console.log(`Found player entity with ID: ${playerEntity.id}`);
+        
+        // Add to this player's selections
+        if (!playerPartnerSelections[playerEntity.id]) {
+          playerPartnerSelections[playerEntity.id] = new Set();
+        }
+        playerPartnerSelections[playerEntity.id].add(data.partnerId);
+        
+        // Find the potential partner entity to send them a notification
+        const potentialPartner = Array.from(QUEUED_PLAYER_ENTITIES)
+          .find(p => p.id === data.partnerId);
+        
+        if (potentialPartner) {
+          // Send notification to the selected player
+          potentialPartner.player.ui.sendData({
+            type: 'partnerRequest',
+            message: `${playerEntity.player.username} wants to be your partner!`
+          });
+        }
+        
+        console.log('Current partner selections:', playerPartnerSelections);
+        
+        // Check if both players selected each other
+        if (playerPartnerSelections[data.partnerId]?.has(playerEntity.id)) {
+          console.log(`Mutual selection found between ${playerEntity.id} and ${data.partnerId}`);
+          
+          // Create partnership
+          playerPartners[playerEntity.id] = data.partnerId;
+          playerPartners[data.partnerId] = playerEntity.id;
+          
+          console.log('Updated partnerships:', playerPartners);
+          
+          // Find partner entity
+          const partnerEntity = Array.from(QUEUED_PLAYER_ENTITIES)
+            .find(p => p.id === data.partnerId);
+          
+          if (partnerEntity) {
+            // Notify both players of confirmed partnership
+            const playerConfirmMessage = {
+              type: 'partnerConfirmed',
+              partnerId: data.partnerId,
+              partnerName: partnerEntity.player.username,
+              message: `${partnerEntity.player.username} is now your partner!`
+            };
+            
+            const partnerConfirmMessage = {
+              type: 'partnerConfirmed',
+              partnerId: playerEntity.id,
+              partnerName: playerEntity.player.username,
+              message: `${playerEntity.player.username} is now your partner!`
+            };
+            
+            playerEntity.player.ui.sendData(playerConfirmMessage);
+            partnerEntity.player.ui.sendData(partnerConfirmMessage);
+          }
+        } else {
+          console.log(`No mutual selection yet. Waiting for partner ${data.partnerId} to select player ${playerEntity.id}`);
+        }
+      }
+    }
+  };
 }
 
   //   * Despawn the player's entity and perform any other + cleanup when they leave the game. 
@@ -349,6 +442,35 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
       queueGame(world);
     }
   
+    // Update partner selection UI for all queued players
+    if (gameState === 'starting') {
+      QUEUED_PLAYER_ENTITIES.forEach(entity => {
+        const playerId = entity.id!;
+        
+        // Get list of other players
+        const availablePlayers = Array.from(QUEUED_PLAYER_ENTITIES)
+          .filter(p => p.id !== playerId)
+          .map(p => ({
+            id: p.id,
+            name: p.player.username
+          }));
+        
+        // Initialize selection tracking if needed
+        if (!playerPartnerSelections[playerId]) {
+          playerPartnerSelections[playerId] = new Set();
+        }
+        
+        // Unlock pointer for all players in queue during partner selection
+        entity.player.ui.lockPointer(false);
+        
+        // Send updated selection UI to player
+        entity.player.ui.sendData({
+          type: 'partnerSelection',
+          availablePlayers
+        });
+      });
+    }
+  
     const queuedSceneUi = new SceneUI({
       templateId: 'player-queued',
       attachedToEntity: playerEntity,
@@ -362,6 +484,13 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
     gameState = 'starting';
     gameCountdownStartTime = Date.now();
 
+    // Clear any existing partnerships and selections at queue start
+    playerPartners = {};
+    playerPartnerSelections = {};
+
+    // Start partner selection for this queue
+    startPartnerSelection(world);
+
     // Start countdown updates
     const countdownInterval = setInterval(() => {
       const now = Date.now();
@@ -372,7 +501,7 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
         playerEntity.player.ui.sendData({
           type: 'countdownUpdate',
           seconds: secondsLeft,
-          shouldFade: secondsLeft <= 2  // Add flag for fading
+          shouldFade: secondsLeft <= 2
         });
       });
 
@@ -383,6 +512,11 @@ function spawnHeatCluster(world: World, position: { x: number, y: number, z: num
 
     setTimeout(() => {
       QUEUED_PLAYER_ENTITIES.forEach(playerEntity => {
+        // Send game start signal before moving players
+        playerEntity.player.ui.sendData({
+          type: 'gameStart'
+        });
+        
         playerEntity.setPosition(GAME_CONFIG.POSITIONS.ARENA);
         GAME_PLAYER_ENTITIES.add(playerEntity);
 
@@ -507,27 +641,92 @@ function spawnSuperCharge(world: World, position: { x: number, y: number, z: num
   superCharge.spawn(world, position);
 }
 
-function startGame (world: World) {
-
-  
-  
+function startGame(world: World) {
   gameState = 'inProgress';
   gameStartTime = Date.now();
 
+  console.log('Starting game with players:', Array.from(GAME_PLAYER_ENTITIES).map(p => p.id));
+  console.log('Current partnerships:', playerPartners);
 
   // Initialize active players
   GAME_PLAYER_ENTITIES.forEach(playerEntity => {
+    const playerId = playerEntity.id!;
+    console.log(`Setting up player ${playerId}...`);
+    
     ACTIVE_PLAYERS.add(playerEntity);
     
     // Reset player state for new game
-    playerHeatLevel[playerEntity.id!] = 1;
-    playerInLava[playerEntity.id!] = false;
-    if (playerHeatIntervals[playerEntity.id!]) {
-      clearInterval(playerHeatIntervals[playerEntity.id!]);
-      delete playerHeatIntervals[playerEntity.id!];
+    playerHeatLevel[playerId] = 1;
+    playerInLava[playerId] = false;
+    
+    console.log(`Game starting - Player ${playerId} has ${playerTeleportCharges[playerId]} charges and partner: ${playerPartners[playerId]}`);
+    
+    // Add teleport cooldown tracking
+    const playerState = {
+      lastTeleportTime: 0,
+      TELEPORT_COOLDOWN: 500
+    };
+    
+    // Set up teleport input handling
+    if (playerEntity.controller) {
+      playerEntity.controller.onTickWithPlayerInput = (entity, input) => {
+        if (input.q) {
+          console.log(`Q pressed detected for player ${playerId}`);
+          
+          if (gameState !== 'inProgress' || !ACTIVE_PLAYERS.has(playerEntity)) {
+            console.log(`Game state or player state invalid for teleport`);
+            return;
+          }
+          
+          if (playerTeleportCharges[playerId] <= 0) {
+            console.log(`No charges remaining for player ${playerId}`);
+            return;
+          }
+          
+          const now = Date.now();
+          if (now - playerState.lastTeleportTime <= playerState.TELEPORT_COOLDOWN) {
+            console.log(`Teleport on cooldown for player ${playerId}`);
+            return;
+          }
+          
+          const partnerId = playerPartners[playerId];
+          if (!partnerId) {
+            console.log(`No partner assigned for player ${playerId}`);
+            return;
+          }
+          
+          const partnerEntity = Array.from(ACTIVE_PLAYERS).find(p => p.id === partnerId);
+          if (!partnerEntity) {
+            console.log(`Partner entity ${partnerId} not found in active players`);
+            return;
+          }
+          
+          // All checks passed, perform teleport
+          playerState.lastTeleportTime = now;
+          playerTeleportCharges[playerId]--;
+          
+          console.log(`Teleporting player ${playerId} to partner ${partnerId} at position:`, partnerEntity.position);
+          playerEntity.setPosition(partnerEntity.position);
+          
+          // Update UI with new charge count
+          playerEntity.player.ui.sendData({
+            type: 'updatePlayerState',
+            heatLevel: playerHeatLevel[playerId],
+            inLava: playerInLava[playerId],
+            score: playerScore[playerId],
+            topScore: playerTopScore[playerId],
+            playerName: playerEntity.player.username,
+            playerId: playerId,
+            lastShiftLeaders,
+            allTimeLeaders,
+            teleportCharges: playerTeleportCharges[playerId],
+          });
+        }
+      };
+    } else {
+      console.error(`No controller found for player ${playerId}`);
     }
   });
-
 
   // Reset player score to 0
   ACTIVE_PLAYERS.forEach(playerEntity => {
@@ -535,7 +734,6 @@ function startGame (world: World) {
     playerScore[playerId] = 0;
     playerScoreMultipliers[playerId] = 1; // Reset multiplier at game start
   });
-
 
   // Start score accumulation
   updateScore();
@@ -673,6 +871,11 @@ risingLava.spawn(world, { x: lavaStartX+1, y: lavaY, z: lavaStartZ+1 });
 
   // Clear last shift leaderboard
   lastShiftLeaders.length = 0;
+
+  // Make sure all players have their pointers locked for gameplay
+  ACTIVE_PLAYERS.forEach(playerEntity => {
+    playerEntity.player.ui.lockPointer(true);
+  });
 }
 
 // End Game Function *******************************************************************************************************
@@ -681,6 +884,11 @@ function endGame(world: World) {
   if (gameState !== 'inProgress') return;
   
   gameState = 'awaitingPlayers';
+
+  // Clear teleport input handlers
+  ACTIVE_PLAYERS.forEach(playerEntity => {
+    playerEntity.controller!.onTickWithPlayerInput = undefined;
+  });
 
   // Update leaderboards for all active players
   ACTIVE_PLAYERS.forEach(playerEntity => {
@@ -743,45 +951,78 @@ function endGame(world: World) {
     if (QUEUED_PLAYER_ENTITIES.size >= 1) {
       queueGame(world);
     }
+
+    // Clear partnerships
+    playerPartners = {};
+    playerPartnerSelections = {};
+    playerTeleportCharges = {};
   }, 10000);
 }
 
 
   // PLAYER RESPAWN FUNCTION *************************************************************
 
-  function overHeat(playerEntity: PlayerEntity) {
-
-      
-      // Clear the heat interval if it exists
-      if (playerHeatIntervals[playerEntity.id!]) {
-          clearInterval(playerHeatIntervals[playerEntity.id!]);
-          delete playerHeatIntervals[playerEntity.id!];
-      }
-
-      playerEntity.setLinearVelocity({ x: 0, y: 0, z: 0 });
-      playerEntity.setPosition(GAME_CONFIG.POSITIONS.LOBBY);
-      playerHeatLevel[playerEntity.id!] = 1;
-      playerInLava[playerEntity.id!] = false;
-      ACTIVE_PLAYERS.delete(playerEntity);  // Remove from active players
-      
-      
-      if (playerScore[playerEntity.id!] > (playerTopScore[playerEntity.id!] || 0)) {
-          playerTopScore[playerEntity.id!] = playerScore[playerEntity.id!];
-      }
-
-      // Send immediate UI update
-      playerEntity.player.ui.sendData({
-          type: 'updatePlayerState',
-          heatLevel: playerHeatLevel[playerEntity.id!],
-          inLava: playerInLava[playerEntity.id!],
-          score: playerScore[playerEntity.id!],
-          topScore: playerTopScore[playerEntity.id!]
-      });
-
-      if (playerScore[playerEntity.id!] > 0) {
-        updateLeaderboards(playerEntity);
-      }
+function cleanupPlayerState(playerId: number) {
+  // Clear partner assignments but keep teleport charges
+  if (playerPartners[playerId]) {
+    const partnerId = playerPartners[playerId];
+    delete playerPartners[playerId];
+    delete playerPartners[partnerId];
   }
+  
+  // Clear partner selections
+  if (playerPartnerSelections[playerId]) {
+    delete playerPartnerSelections[playerId];
+  }
+}
+
+function overHeat(playerEntity: PlayerEntity) {
+    const playerId = playerEntity.id!;
+    console.log(`Player ${playerId} overheating with ${playerTeleportCharges[playerId]} teleport charges`);
+    
+    // Clear the heat interval if it exists
+    if (playerHeatIntervals[playerId]) {
+        clearInterval(playerHeatIntervals[playerId]);
+        delete playerHeatIntervals[playerId];
+    }
+
+    playerEntity.setLinearVelocity({ x: 0, y: 0, z: 0 });
+    playerEntity.setPosition(GAME_CONFIG.POSITIONS.LOBBY);
+    playerHeatLevel[playerId] = 1;
+    playerInLava[playerId] = false;
+    ACTIVE_PLAYERS.delete(playerEntity);  // Remove from active players
+    
+    if (playerScore[playerId] > (playerTopScore[playerId] || 0)) {
+        playerTopScore[playerId] = playerScore[playerId];
+    }
+
+    // Only clean up partnerships, NOT teleport charges
+    if (playerPartners[playerId]) {
+        const partnerId = playerPartners[playerId];
+        delete playerPartners[playerId];
+        delete playerPartners[partnerId];
+    }
+    
+    if (playerPartnerSelections[playerId]) {
+        delete playerPartnerSelections[playerId];
+    }
+
+    console.log(`After overheat, player ${playerId} has ${playerTeleportCharges[playerId]} teleport charges`);
+
+    // Send immediate UI update with current teleport charges
+    playerEntity.player.ui.sendData({
+        type: 'updatePlayerState',
+        heatLevel: playerHeatLevel[playerId],
+        inLava: playerInLava[playerId],
+        score: playerScore[playerId],
+        topScore: playerTopScore[playerId],
+        teleportCharges: playerTeleportCharges[playerId] // Make sure we're sending the current charges
+    });
+
+    if (playerScore[playerId] > 0) {
+      updateLeaderboards(playerEntity);
+    }
+}
 
   // AUDIO STUFF **************************************************************************************
 
@@ -993,9 +1234,171 @@ lvlAMovingPlatform2.spawn(world, { x: 15, y: 6, z: -12 });
 
 });
 
+// Add new function to handle teleport requests
+function handleTeleportRequest(world: World, playerEntity: PlayerEntity) {
+  const playerId = playerEntity.id!;
+  
+  // Check if player has a partner
+  if (!playerPartners[playerId]) {
+    playerEntity.player.ui.sendData({
+      type: 'teleportStatus',
+      status: 'noPartner',
+      message: 'No partner available'
+    });
+    return;
+  }
+
+  // Check if player has charges remaining
+  if (playerTeleportCharges[playerId] <= 0) {
+    playerEntity.player.ui.sendData({
+      type: 'teleportStatus',
+      status: 'noCharges',
+      message: 'No teleport charges remaining'
+    });
+    return;
+  }
+
+  // Get partner entity
+  const partnerId = playerPartners[playerId];
+  let partnerEntity: PlayerEntity | undefined;
+  
+  // Find partner entity from active players
+  ACTIVE_PLAYERS.forEach(entity => {
+    if (entity.id === partnerId) {
+      partnerEntity = entity;
+    }
+  });
+  
+  if (!partnerEntity || !ACTIVE_PLAYERS.has(partnerEntity)) {
+    delete playerPartners[playerId];
+    playerEntity.player.ui.sendData({
+      type: 'teleportStatus',
+      status: 'invalidPartner',
+      message: 'Partner no longer in game'
+    });
+    return;
+  }
+
+  // Perform teleport
+  playerTeleportCharges[playerId]--;
+  playerEntity.setPosition(partnerEntity.position);
+  
+  // Notify player of successful teleport and remaining charges
+  playerEntity.player.ui.sendData({
+    type: 'teleportStatus',
+    status: 'success',
+    chargesRemaining: playerTeleportCharges[playerId],
+    message: `Teleported to partner! ${playerTeleportCharges[playerId]} charges remaining`
+  });
+}
+
+// Add new function to handle partner selection during countdown
+function startPartnerSelection(world: World) {
+  // Reset partner selections
+  playerPartnerSelections = {};
+  
+  // Send updated partner selection UI to all queued players
+  QUEUED_PLAYER_ENTITIES.forEach(entity => {
+    const playerId = entity.id!;
+    
+    // Get list of other players
+    const availablePlayers = Array.from(QUEUED_PLAYER_ENTITIES)
+      .filter(p => p.id !== playerId)
+      .map(p => ({
+        id: p.id,
+        name: p.player.username
+      }));
+    
+    // Initialize selection tracking
+    playerPartnerSelections[playerId] = new Set();
+    
+    // Send selection UI to player
+    entity.player.ui.sendData({
+      type: 'partnerSelection',
+      availablePlayers
+    });
+  });
+}
+
+// Add to handlePartnerSelection to relock pointer after selection
+function handlePartnerSelection(world: World, playerEntity: PlayerEntity, selectedPartnerId: number) {
+  const playerId = playerEntity.id!;
+  
+  // Add to selections
+  if (!playerPartnerSelections[playerId]) {
+    playerPartnerSelections[playerId] = new Set();
+  }
+  playerPartnerSelections[playerId].add(selectedPartnerId);
+  
+  // Send immediate feedback to selecting player
+  playerEntity.player.ui.sendData({
+    type: 'partnerSelectionUpdate',
+    selectedId: selectedPartnerId,
+    status: 'pending',
+    message: 'Waiting for partner to confirm...'
+  });
+  
+  // Notify the potential partner
+  QUEUED_PLAYER_ENTITIES.forEach(entity => {
+    if (entity.id === selectedPartnerId) {
+      entity.player.ui.sendData({
+        type: 'partnerSelectionNotification',
+        fromPlayerId: playerId,
+        fromPlayerName: playerEntity.player.username,
+        message: `${playerEntity.player.username} wants to be your partner!`
+      });
+    }
+  });
+  
+  // Check if mutual selection exists
+  if (playerPartnerSelections[selectedPartnerId]?.has(playerId)) {
+    // Create partnership
+    playerPartners[playerId] = selectedPartnerId;
+    playerPartners[selectedPartnerId] = playerId;
+    
+    // Find partner name
+    let partnerName = '';
+    QUEUED_PLAYER_ENTITIES.forEach(entity => {
+      if (entity.id === selectedPartnerId) {
+        partnerName = entity.player.username;
+      }
+    });
+
+    // Notify both players of confirmed partnership
+    const notification = {
+      type: 'partnerConfirmed',
+      partnerId: selectedPartnerId,
+      partnerName: partnerName
+    };
+    
+    playerEntity.player.ui.sendData(notification);
+    
+    // Find and notify partner
+    QUEUED_PLAYER_ENTITIES.forEach(entity => {
+      if (entity.id === selectedPartnerId) {
+        entity.player.ui.sendData({
+          ...notification,
+          partnerId: playerId,
+          partnerName: playerEntity.player.username
+        });
+      }
+    });
+  }
+}
+
+// Add to the existing UI message handling pattern
+function handleUIMessage(world: World, playerEntity: PlayerEntity, message: any) {
+  // ... existing message handlers ...
+
+  // Add new handler for partner selection
+  if (message.type === 'selectPartner') {
+    handlePartnerSelection(world, playerEntity, message.partnerId);
+  }
+}
 
 
 
 
+// DEBUGGING TElEPORT FUNCTIONLITY AND CHARGE NUMBERS BETWEEN GAMES. Seems like a player is losing 2 and then when it hits 0 its messed up.
 
 

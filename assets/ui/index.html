@@ -19,6 +19,17 @@
       if (bottomUI) {
         bottomUI.style.display = 'flex';
       }
+      // Hide partner selection UI
+      const partnerSelectionUI = document.getElementById('partnerSelectionUI');
+      if (partnerSelectionUI) {
+        // Add fade-out class
+        partnerSelectionUI.classList.add('fade-out');
+        // Remove from DOM after fade completes
+        setTimeout(() => {
+          partnerSelectionUI.style.display = 'none';
+          partnerSelectionUI.classList.remove('fade-out');
+        }, 500);
+      }
     }
 
     // Handle game end
@@ -39,6 +50,9 @@
     // Handle player state updates
 
     if (data.type === 'updatePlayerState') {
+      // Add debug logging
+      console.log('Received player state update:', data);
+      
       var heatBar = document.getElementById('heatBar');
       var heatPercent = (data.heatLevel / 1000) * 100;
       heatBar.style.width = heatPercent + '%';
@@ -52,6 +66,20 @@
       // Update leaderboards if included
       if (data.lastShiftLeaders && data.allTimeLeaders) {
         updateLeaderboards(data.lastShiftLeaders, data.allTimeLeaders);
+      }
+
+      // Update existing stats
+      document.getElementById('heatLevel').textContent = Math.floor(data.heatLevel);
+      document.getElementById('score').textContent = Math.floor(data.score);
+      document.getElementById('topScore').textContent = Math.floor(data.topScore);
+      
+      // Update teleport charges with explicit check
+      const teleportChargesElement = document.getElementById('teleportCharges');
+      if (teleportChargesElement) {
+        console.log('Setting teleport charges display to:', data.teleportCharges);
+        teleportChargesElement.textContent = data.teleportCharges;
+      } else {
+        console.error('Teleport charges element not found! DOM structure:', document.body.innerHTML);
       }
     }
 
@@ -141,6 +169,108 @@
         notification.classList.remove('active');
       }
     }
+
+    if (data.type === 'partnerSelection') {
+      const partnerUI = document.getElementById('partnerSelectionUI');
+      const partnerList = document.getElementById('partnerList');
+      const statusEl = document.getElementById('selectionStatus');
+      
+      partnerUI.style.display = 'block';
+      statusEl.textContent = '';
+      partnerList.innerHTML = data.availablePlayers
+        .map(player => `
+          <div class="partner-option" data-id="${player.id}">
+            ${player.name}
+          </div>
+        `).join('');
+        
+      // Add click handlers
+      document.querySelectorAll('.partner-option').forEach(option => {
+        option.addEventListener('click', () => {
+          const partnerId = Number(option.dataset.id);
+          hytopia.sendData({
+            type: 'selectPartner',
+            partnerId
+          });
+          
+          // Visual feedback
+          document.querySelectorAll('.partner-option').forEach(opt => 
+            opt.classList.remove('selected'));
+          option.classList.add('selected');
+        });
+      });
+    }
+
+    if (data.type === 'partnerSelectionUpdate') {
+      const statusEl = document.getElementById('selectionStatus');
+      statusEl.textContent = data.message;
+      
+      document.querySelectorAll('.partner-option').forEach(option => {
+        if (Number(option.dataset.id) === data.selectedId) {
+          option.classList.add('pending');
+        }
+      });
+    }
+
+    if (data.type === 'partnerSelectionNotification') {
+      const statusEl = document.getElementById('selectionStatus');
+      statusEl.textContent = data.message;
+      
+      document.querySelectorAll('.partner-option').forEach(option => {
+        if (Number(option.dataset.id) === data.fromPlayerId) {
+          option.classList.add('requesting');
+        }
+      });
+    }
+
+    if (data.type === 'partnerRequest') {
+      const statusEl = document.getElementById('selectionStatus');
+      if (statusEl) {
+        statusEl.textContent = data.message;
+        statusEl.style.color = '#ffaa00'; // Orange color for pending request
+      }
+    }
+
+    if (data.type === 'partnerConfirmed') {
+      const statusEl = document.getElementById('selectionStatus');
+      const partnerUI = document.getElementById('partnerSelectionUI');
+      const partnerInfo = document.getElementById('partnerInfo');
+      
+      if (statusEl) {
+        statusEl.textContent = data.message;
+        statusEl.style.color = '#00ff00'; // Green color for confirmation
+      }
+      
+      // Hide partner selection UI after a delay
+      setTimeout(() => {
+        if (partnerUI) {
+          partnerUI.style.display = 'none';
+        }
+        if (partnerInfo) {
+          partnerInfo.style.display = 'block';
+          partnerInfo.querySelector('.partner-name').textContent = `Partner: ${data.partnerName}`;
+          partnerInfo.querySelector('.teleport-charges').textContent = 
+            `Teleport Charges: ${INITIAL_TELEPORT_CHARGES}`;
+        }
+      }, 2000); // 2 second delay to show the confirmation message
+    }
+
+    if (data.type === 'teleportStatus') {
+      const statusEl = document.getElementById('teleportStatus');
+      statusEl.textContent = data.message;
+      statusEl.className = `teleport-status ${data.status}`;
+      
+      if (data.chargesRemaining !== undefined) {
+        document.querySelector('.teleport-charges').textContent = 
+          `Teleport Charges: ${data.chargesRemaining}`;
+      }
+      
+      // Clear status message after delay
+      setTimeout(() => {
+        statusEl.textContent = '';
+        statusEl.className = 'teleport-status';
+      }, 3000);
+    }
   });
 
   // Helper functions
@@ -202,6 +332,13 @@
       callback(data);
     });
   };
+
+  function selectPartner(partnerId) {
+    hytopia.sendData({
+      type: 'selectPartner',
+      partnerId
+    });
+  }
 </script>
 
 
@@ -210,7 +347,28 @@
 
 <!-- Game UI -->
 
-<div id="gameUI">
+<div id="game-ui">
+  <!-- Stats Container -->
+  <div class="stats-container">
+    <div class="game-stat">
+      <div class="stat-label">Heat Level</div>
+      <div id="heatLevel" class="stat-value">0</div>
+    </div>
+    <div class="game-stat">
+      <div class="stat-label">Score</div>
+      <div id="score" class="stat-value">0</div>
+    </div>
+    <div class="game-stat">
+      <div class="stat-label">Top Score</div>
+      <div id="topScore" class="stat-value">0</div>
+    </div>
+    <!-- Add teleport charges here -->
+    <div class="game-stat teleport-info">
+      <span class="stat-label">Teleport Charges:</span>
+      <span id="teleportCharges" class="stat-value">0</span>
+    </div>
+  </div>
+
   <!-- Leaderboards -->
   <div class="leaderboards-container">
     <div class="best-shift-box">
@@ -244,6 +402,25 @@
 
   <div id="countdownMessage" class="countdown-message"></div>
   <div id="lavaOverlay" class="lava-overlay"></div>
+
+  <div id="partnerSelectionUI" class="partner-selection" style="display: none;">
+    <div class="partner-selection-content">
+      <h2>Select Your Partner</h2>
+      <p>Choose a partner for this shift. You can teleport to them during the game.</p>
+      <div id="partnerList" class="partner-list"></div>
+      <div id="selectionStatus" class="selection-status"></div>
+    </div>
+  </div>
+
+  <div id="teleportStatus" class="teleport-status"></div>
+
+  <div id="partnerInfo" class="partner-info" style="display: none;">
+    <div class="partner-name"></div>
+    <div class="teleport-charges"></div>
+  </div>
+
+  <!-- Move this element outside any containers that might be hidden -->
+  <div id="countdown" class="countdown"></div>
 </div>
 
 <!-- Super Charge UI -->
@@ -476,7 +653,7 @@
     text-align: center;
     opacity: 0;
     transition: opacity 0.5s;
-    z-index: 1001;
+    z-index: 900;
     pointer-events: none;
   }
 
@@ -625,6 +802,199 @@
 
   .heat-cluster-notification.active {
     opacity: 1;
+  }
+
+  /* Add new styles */
+  .partner-selection {
+    position: fixed;
+    top: 60%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    padding: 20px;
+    border-radius: 10px;
+    border: 2px solid #ff6600;
+    color: white;
+    z-index: 1000;
+    opacity: 1;
+    transition: opacity 0.5s ease;
+    max-height: 80vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .partner-list {
+    max-height: 40vh;
+    overflow-y: auto;
+    margin: 10px 0;
+    padding-right: 10px;
+  }
+
+  .partner-list::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .partner-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+  }
+
+  .partner-list::-webkit-scrollbar-thumb {
+    background: #ff6600;
+    border-radius: 4px;
+  }
+
+  .countdown {
+    top: 25%;
+  }
+
+  .partner-selection.fade-out {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .partner-option {
+    padding: 10px;
+    margin: 5px 0;
+    background: rgba(255, 102, 0, 0.2);
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .partner-option:hover {
+    background: rgba(255, 102, 0, 0.4);
+  }
+
+  .partner-option.selected {
+    background: rgba(255, 102, 0, 0.6);
+    border: 2px solid #ff6600;
+  }
+
+  .partner-option.pending {
+    background: rgba(255, 255, 0, 0.3);
+    border: 2px solid #ffff00;
+  }
+
+  .partner-option.requesting {
+    background: rgba(0, 255, 0, 0.3);
+    border: 2px solid #00ff00;
+  }
+
+  .partner-info {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px;
+    border-radius: 5px;
+    color: white;
+  }
+
+  .teleport-status {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    padding: 10px 20px;
+    border-radius: 5px;
+    color: white;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+
+  .teleport-status.success {
+    background: rgba(0, 255, 0, 0.8);
+  }
+
+  .teleport-status.noPartner,
+  .teleport-status.noCharges,
+  .teleport-status.invalidPartner {
+    background: rgba(255, 0, 0, 0.8);
+  }
+
+  .selection-status {
+    margin-top: 10px;
+    padding: 10px;
+    text-align: center;
+    color: #fff;
+    font-style: italic;
+  }
+
+  /* Update to match existing game-stat styling */
+  .game-stat.teleport-info {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 15px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 1000; /* Make sure it's visible above other elements */
+  }
+
+  .teleport-info .stat-label {
+    color: #ff6600;
+    font-size: 16px;
+    text-transform: uppercase;
+  }
+
+  .teleport-info .stat-value {
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+  }
+
+  .stats-container {
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    display: flex;
+    gap: 10px;
+  }
+
+  .game-stat {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px;
+    border-radius: 5px;
+    text-align: center;
+  }
+
+  .game-stat.teleport-info {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 8px 15px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 1000;
+  }
+
+  .stat-label {
+    color: #ff6600;
+    font-size: 14px;
+    text-transform: uppercase;
+  }
+
+  .stat-value {
+    color: white;
+    font-size: 24px;
+    font-weight: bold;
+  }
+
+  .teleport-info .stat-label {
+    font-size: 16px;
+  }
+
+  .teleport-info .stat-value {
+    font-size: 20px;
   }
 </style>
   
