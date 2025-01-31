@@ -173,86 +173,62 @@
     if (data.type === 'partnerSelection') {
       const partnerUI = document.getElementById('partnerSelectionUI');
       const partnerList = document.getElementById('partnerList');
-      const statusEl = document.getElementById('selectionStatus');
       
       partnerUI.style.display = 'block';
-      statusEl.textContent = '';
       partnerList.innerHTML = data.availablePlayers
         .map(player => `
-          <div class="partner-option" data-id="${player.id}">
-            ${player.name}
+          <div class="partner-option" onclick="requestPartner(${player.id}, '${player.name}')">
+            <div class="player-name">${player.name}</div>
+            <div class="request-status"></div>
           </div>
         `).join('');
-        
-      // Add click handlers
-      document.querySelectorAll('.partner-option').forEach(option => {
-        option.addEventListener('click', () => {
-          const partnerId = Number(option.dataset.id);
-          hytopia.sendData({
-            type: 'selectPartner',
-            partnerId
-          });
-          
-          // Visual feedback
-          document.querySelectorAll('.partner-option').forEach(opt => 
-            opt.classList.remove('selected'));
-          option.classList.add('selected');
-        });
-      });
-    }
-
-    if (data.type === 'partnerSelectionUpdate') {
-      const statusEl = document.getElementById('selectionStatus');
-      statusEl.textContent = data.message;
-      
-      document.querySelectorAll('.partner-option').forEach(option => {
-        if (Number(option.dataset.id) === data.selectedId) {
-          option.classList.add('pending');
-        }
-      });
-    }
-
-    if (data.type === 'partnerSelectionNotification') {
-      const statusEl = document.getElementById('selectionStatus');
-      statusEl.textContent = data.message;
-      
-      document.querySelectorAll('.partner-option').forEach(option => {
-        if (Number(option.dataset.id) === data.fromPlayerId) {
-          option.classList.add('requesting');
-        }
-      });
     }
 
     if (data.type === 'partnerRequest') {
-      const statusEl = document.getElementById('selectionStatus');
-      if (statusEl) {
-        statusEl.textContent = data.message;
-        statusEl.style.color = '#ffaa00'; // Orange color for pending request
-      }
+      const pendingRequest = document.getElementById('pendingRequest');
+      const message = pendingRequest.querySelector('.request-message');
+      
+      message.textContent = `${data.fromName} wants to be your partner!`;
+      pendingRequest.style.display = 'block';
+
+      // Setup response buttons
+      pendingRequest.querySelector('.accept-btn').onclick = () => {
+        hytopia.sendData({
+          type: 'respondToPartnerRequest',
+          accepted: true
+        });
+        pendingRequest.style.display = 'none';
+      };
+
+      pendingRequest.querySelector('.reject-btn').onclick = () => {
+        hytopia.sendData({
+          type: 'respondToPartnerRequest',
+          accepted: false
+        });
+        pendingRequest.style.display = 'none';
+      };
     }
 
-    if (data.type === 'partnerConfirmed') {
+    if (data.type === 'partnerRequestFailed') {
       const statusEl = document.getElementById('selectionStatus');
-      const partnerUI = document.getElementById('partnerSelectionUI');
-      const partnerInfo = document.getElementById('partnerInfo');
-      
-      if (statusEl) {
-        statusEl.textContent = data.message;
-        statusEl.style.color = '#00ff00'; // Green color for confirmation
-      }
-      
-      // Hide partner selection UI after a delay
+      statusEl.textContent = data.message;
+      statusEl.className = 'selection-status error';
       setTimeout(() => {
-        if (partnerUI) {
-          partnerUI.style.display = 'none';
-        }
-        if (partnerInfo) {
-          partnerInfo.style.display = 'block';
-          partnerInfo.querySelector('.partner-name').textContent = `Partner: ${data.partnerName}`;
-          partnerInfo.querySelector('.teleport-charges').textContent = 
-            `Teleport Charges: ${INITIAL_TELEPORT_CHARGES}`;
-        }
-      }, 2000); // 2 second delay to show the confirmation message
+        statusEl.textContent = '';
+        statusEl.className = 'selection-status';
+      }, 3000);
+    }
+
+    if (data.type === 'partnershipFormed') {
+      const partnerUI = document.getElementById('partnerSelectionUI');
+      const statusEl = document.getElementById('selectionStatus');
+      
+      statusEl.textContent = `Partnership formed with ${data.player2}!`;
+      statusEl.className = 'selection-status success';
+      
+      setTimeout(() => {
+        partnerUI.style.display = 'none';
+      }, 2000);
     }
 
     if (data.type === 'teleportStatus') {
@@ -339,6 +315,17 @@
       partnerId
     });
   }
+
+  function requestPartner(id, name) {
+    hytopia.sendData({
+      type: 'requestPartner',
+      targetId: id
+    });
+    
+    const statusEl = document.getElementById('selectionStatus');
+    statusEl.textContent = `Request sent to ${name}...`;
+    statusEl.className = 'selection-status pending';
+  }
 </script>
 
 
@@ -405,10 +392,17 @@
 
   <div id="partnerSelectionUI" class="partner-selection" style="display: none;">
     <div class="partner-selection-content">
-      <h2>Select Your Partner</h2>
-      <p>Choose a partner for this shift. You can teleport to them during the game.</p>
+      <h2>Choose Your Partner</h2>
+      <p>Select someone to team up with for this shift. Partners can teleport to each other during the game.</p>
       <div id="partnerList" class="partner-list"></div>
       <div id="selectionStatus" class="selection-status"></div>
+      <div id="pendingRequest" class="pending-request" style="display: none;">
+        <div class="request-message"></div>
+        <div class="request-buttons">
+          <button class="accept-btn">Accept</button>
+          <button class="reject-btn">Decline</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -855,16 +849,21 @@
   }
 
   .partner-option {
-    padding: 10px;
-    margin: 5px 0;
-    background: rgba(255, 102, 0, 0.2);
-    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    margin: 8px 0;
+    background: rgba(255, 102, 0, 0.1);
+    border: 2px solid transparent;
+    border-radius: 8px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
   }
 
   .partner-option:hover {
-    background: rgba(255, 102, 0, 0.4);
+    background: rgba(255, 102, 0, 0.2);
+    border-color: rgba(255, 102, 0, 0.5);
   }
 
   .partner-option.selected {
@@ -916,12 +915,62 @@
   }
 
   .selection-status {
-    margin-top: 10px;
     padding: 10px;
+    margin-top: 15px;
+    border-radius: 5px;
     text-align: center;
-    color: #fff;
-    font-style: italic;
   }
+
+  .selection-status.error {
+    background: rgba(255, 0, 0, 0.2);
+    color: #ff4444;
+  }
+
+  .selection-status.success {
+    background: rgba(0, 255, 0, 0.2);
+    color: #44ff44;
+  }
+
+  .selection-status.pending {
+    background: rgba(255, 165, 0, 0.2);
+    color: #ffa500;
+  }
+
+  .pending-request {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(255, 165, 0, 0.1);
+    border-radius: 8px;
+    text-align: center;
+  }
+
+  .request-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-top: 10px;
+  }
+
+  .request-buttons button {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .accept-btn {
+    background: #00aa00;
+    color: white;
+  }
+
+  .reject-btn {
+    background: #aa0000;
+    color: white;
+  }
+
+  .accept-btn:hover { background: #00cc00; }
+  .reject-btn:hover { background: #cc0000; }
 
   /* Update to match existing game-stat styling */
   .game-stat.teleport-info {
