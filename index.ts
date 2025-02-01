@@ -46,22 +46,28 @@ const GAME_CONFIG = {
     ARENA: { x: 14, y: 5, z: -12},      // Arena Spawn Point
     JOIN_NPC: { x: -20, y: 5, z: 4 },  // Shift Manager Spawn Point (***** UPDATE NAME TO SHIFT MANAGER! ***)
     LOBBY: { x: 0, y: 4, z: 0 },       // Lobby Repawn Point after shift ends
-    GAME_JOIN: { x: -33, y: 4, z: 1 }, // Initial spawn point for players joining the server
+    GAME_JOIN: { x: 24, y: 13, z: -4 }, // Initial spawn point for players joining the server { x: -33, y: 4, z: 1 }
   },
 
   // Spawn points and IDs for super charges
     
   SUPER_CHARGES: [
-    { id: 'charge1', position: { x: 15, y: 7, z: 10 } },   // (******* NOT SET YET *******) 
-    { id: 'charge2', position: { x: -10, y: 2, z: -10 } }, // (******* NOT SET YET *******)
-    { id: 'charge3', position: { x: 15, y: 2, z: -15 } }   // (******* NOT SET YET *******)
+    { id: 'charge1', position: { x: 24, y: 12, z: -4 } },   // Level B Corner 
+    { id: 'charge2', position: { x: 6, y: 12, z: -4 } },    // Level B Corner
+    { id: 'charge3', position: { x: 6, y: 12, z: -22 } },    //  Level B Corner
+    { id: 'charge4', position: { x: 24, y: 12, z: -22 } }     // Level B Corner
   ],
+
 
   // Spawn points and IDs for heat clusters
 
   HEAT_CLUSTERS: [
      { id: 'cluster1', position: { x: 15, y: 9, z: -4 } },  // Level A Front
     { id: 'cluster2', position: { x: 15, y: 9, z: -22 } },  // Level A Back
+    { id: 'cluster3', position: { x: 16, y: 17, z: -14 } },  // Level C Cluser
+    { id: 'cluster4', position: { x: 14, y: 17, z: -14 } },  // Level C Cluser
+    { id: 'cluster5', position: { x: 16, y: 17, z: -12 } },  // Level C Cluser
+    { id: 'cluster6', position: { x: 14, y: 17, z: -12 } },  // Level C Cluser
   ]
 };
 
@@ -142,6 +148,7 @@ startServer(world => {
   spawnJoinNpc(world);
   
   // Build the chamber course
+
   buildChamberCourse(world);
 
   // Spawn heat clusters at each position
@@ -176,7 +183,7 @@ startServer(world => {
 
    // Spawn player entity
   
-   playerEntity.spawn(world, GAME_CONFIG.POSITIONS.LOBBY);
+   playerEntity.spawn(world, GAME_CONFIG.POSITIONS.GAME_JOIN);
 
    // Setup Teleport Input
 

@@ -1,0 +1,539 @@
+{
+  "blockTypes": [
+    {
+      "id": 1,
+      "name": "bricks",
+      "textureUri": "blocks/bricks.png",
+      "isCustom": false
+    },
+    {
+      "id": 2,
+      "name": "clay",
+      "textureUri": "blocks/clay.png",
+      "isCustom": false
+    },
+    {
+      "id": 3,
+      "name": "coal-ore",
+      "textureUri": "blocks/coal-ore.png",
+      "isCustom": false
+    },
+    {
+      "id": 4,
+      "name": "cobblestone",
+      "textureUri": "blocks/cobblestone.png",
+      "isCustom": false
+    },
+    {
+      "id": 5,
+      "name": "creep",
+      "textureUri": "blocks/creep.png",
+      "isCustom": false
+    },
+    {
+      "id": 6,
+      "name": "diamond-block",
+      "textureUri": "blocks/diamond-block.png",
+      "isCustom": false
+    },
+    {
+      "id": 7,
+      "name": "diamond-ore",
+      "textureUri": "blocks/diamond-ore.png",
+      "isCustom": false
+    },
+    {
+      "id": 8,
+      "name": "dirt",
+      "textureUri": "blocks/dirt.png",
+      "isCustom": false
+    },
+    {
+      "id": 9,
+      "name": "dragon_block",
+      "textureUri": "blocks/dragon_block",
+      "isCustom": false
+    },
+    {
+      "id": 10,
+      "name": "dragons-stone",
+      "textureUri": "blocks/dragons-stone.png",
+      "isCustom": false
+    },
+    {
+      "id": 11,
+      "name": "emerald-block",
+      "textureUri": "blocks/emerald-block.png",
+      "isCustom": false
+    },
+    {
+      "id": 12,
+      "name": "emerald-ore",
+      "textureUri": "blocks/emerald-ore.png",
+      "isCustom": false
+    },
+    {
+      "id": 13,
+      "name": "ghost-dirt",
+      "textureUri": "blocks/ghost-dirt.png",
+      "isCustom": false
+    },
+    {
+      "id": 14,
+      "name": "glass",
+      "textureUri": "blocks/glass.png",
+      "isCustom": false
+    },
+    {
+      "id": 15,
+      "name": "gold-ore",
+      "textureUri": "blocks/gold-ore.png",
+      "isCustom": false
+    },
+    {
+      "id": 16,
+      "name": "grass",
+      "textureUri": "blocks/grass",
+      "isCustom": false
+    },
+    {
+      "id": 17,
+      "name": "gravel",
+      "textureUri": "blocks/gravel.png",
+      "isCustom": false
+    },
+    {
+      "id": 18,
+      "name": "ice",
+      "textureUri": "blocks/ice.png",
+      "isCustom": false
+    },
+    {
+      "id": 19,
+      "name": "infected-shadowrock-core",
+      "textureUri": "blocks/infected-shadowrock-core.png",
+      "isCustom": false
+    },
+    {
+      "id": 20,
+      "name": "infected-shadowrock",
+      "textureUri": "blocks/infected-shadowrock.png",
+      "isCustom": false
+    },
+    {
+      "id": 21,
+      "name": "iron-ore",
+      "textureUri": "blocks/iron-ore.png",
+      "isCustom": false
+    },
+    {
+      "id": 22,
+      "name": "lava",
+      "textureUri": "blocks/lava.png",
+      "isCustom": false
+    },
+    {
+      "id": 23,
+      "name": "log",
+      "textureUri": "blocks/log",
+      "isCustom": false
+    },
+    {
+      "id": 24,
+      "name": "mossy-coblestone",
+      "textureUri": "blocks/mossy-coblestone.png",
+      "isCustom": false
+    },
+    {
+      "id": 25,
+      "name": "nuit-leaves",
+      "textureUri": "blocks/nuit-leaves.png",
+      "isCustom": false
+    },
+    {
+      "id": 26,
+      "name": "nuit",
+      "textureUri": "blocks/nuit.png",
+      "isCustom": false
+    },
+    {
+      "id": 27,
+      "name": "oak-leaves",
+      "textureUri": "blocks/oak-leaves.png",
+      "isCustom": false
+    },
+    {
+      "id": 28,
+      "name": "oak-planks",
+      "textureUri": "blocks/oak-planks.png",
+      "isCustom": false
+    },
+    {
+      "id": 29,
+      "name": "sand-light",
+      "textureUri": "blocks/sand-light.png",
+      "isCustom": false
+    },
+    {
+      "id": 30,
+      "name": "sand",
+      "textureUri": "blocks/sand.png",
+      "isCustom": false
+    },
+    {
+      "id": 31,
+      "name": "sandstone-light",
+      "textureUri": "blocks/sandstone-light.png",
+      "isCustom": false
+    },
+    {
+      "id": 32,
+      "name": "sandstone",
+      "textureUri": "blocks/sandstone.png",
+      "isCustom": false
+    },
+    {
+      "id": 33,
+      "name": "shadow-pebble",
+      "textureUri": "blocks/shadow-pebble.png",
+      "isCustom": false
+    },
+    {
+      "id": 34,
+      "name": "shadowrock",
+      "textureUri": "blocks/shadowrock.png",
+      "isCustom": false
+    },
+    {
+      "id": 35,
+      "name": "snow",
+      "textureUri": "blocks/snow.png",
+      "isCustom": false
+    },
+    {
+      "id": 36,
+      "name": "stone-bricks",
+      "textureUri": "blocks/stone-bricks.png",
+      "isCustom": false
+    },
+    {
+      "id": 37,
+      "name": "stone",
+      "textureUri": "blocks/stone.png",
+      "isCustom": false
+    },
+    {
+      "id": 38,
+      "name": "swirl-rune",
+      "textureUri": "blocks/swirl-rune.png",
+      "isCustom": false
+    },
+    {
+      "id": 39,
+      "name": "void-sand",
+      "textureUri": "blocks/void-sand.png",
+      "isCustom": false
+    },
+    {
+      "id": 40,
+      "name": "void_grass",
+      "textureUri": "blocks/void_grass",
+      "isCustom": false
+    },
+    {
+      "id": 41,
+      "name": "voidsoil",
+      "textureUri": "blocks/voidsoil.png",
+      "isCustom": false
+    },
+    {
+      "id": 42,
+      "name": "water-flow",
+      "textureUri": "blocks/water-flow.png",
+      "isCustom": false
+    },
+    {
+      "id": 43,
+      "name": "water-still",
+      "textureUri": "blocks/water-still.png",
+      "isCustom": false
+    },
+    {
+      "id": 100,
+      "name": "blackStone",
+      "textureUri": "blocks/blackStone.png",
+      "isCustom": true
+    },
+    {
+      "id": 101,
+      "name": "lavaBlock",
+      "textureUri": "blocks/lavaBlock.png",
+      "isCustom": true
+    },
+    {
+      "id": 102,
+      "name": "lavaBrick",
+      "textureUri": "blocks/lavaBrick.png",
+      "isCustom": true
+    },
+    {
+      "id": 103,
+      "name": "lavaClay",
+      "textureUri": "blocks/lavaClay.png",
+      "isCustom": true
+    },
+    {
+      "id": 104,
+      "name": "lavaStone",
+      "textureUri": "blocks/lavaStone.png",
+      "isCustom": true
+    },
+    {
+      "id": 105,
+      "name": "lavaStoneSmall",
+      "textureUri": "blocks/lavaStoneSmall.png",
+      "isCustom": true
+    },
+    {
+      "id": 106,
+      "name": "moletnRockSubtle",
+      "textureUri": "blocks/moletnRockSubtle.png",
+      "isCustom": true
+    },
+    {
+      "id": 107,
+      "name": "moltenRock",
+      "textureUri": "blocks/moltenRock.png",
+      "isCustom": true
+    }
+  ],
+  "blocks": {
+    "4,0,-3": 101,
+    "-3,0,-3": 101,
+    "-3,0,4": 101,
+    "4,0,4": 101,
+    "4,0,1": 101,
+    "4,0,0": 101,
+    "-3,0,1": 101,
+    "-3,0,0": 101,
+    "1,0,-3": 101,
+    "0,0,-3": 101,
+    "0,0,4": 101,
+    "1,0,4": 101,
+    "4,0,2": 104,
+    "4,0,3": 104,
+    "3,0,4": 104,
+    "2,0,4": 104,
+    "-1,0,4": 104,
+    "-2,0,4": 104,
+    "-3,0,3": 104,
+    "-3,0,2": 104,
+    "-3,0,-1": 104,
+    "-3,0,-2": 104,
+    "-2,0,-3": 104,
+    "-1,0,-3": 104,
+    "2,0,-3": 104,
+    "3,0,-3": 104,
+    "4,0,-2": 104,
+    "4,0,-1": 104,
+    "7,0,-6": 104,
+    "-6,0,-6": 104,
+    "-6,0,7": 104,
+    "7,0,7": 104,
+    "9,0,9": 104,
+    "9,0,10": 104,
+    "9,0,-9": 104,
+    "9,0,-8": 104,
+    "10,0,-9": 104,
+    "10,0,-8": 104,
+    "-9,0,-9": 104,
+    "-8,0,-9": 104,
+    "-9,0,-8": 104,
+    "-8,0,-8": 104,
+    "-9,0,9": 104,
+    "-8,0,9": 104,
+    "-9,0,10": 104,
+    "-8,0,10": 104,
+    "10,0,9": 104,
+    "10,0,10": 104,
+    "5,0,0": 101,
+    "5,0,1": 101,
+    "-4,0,0": 101,
+    "-4,0,1": 101,
+    "0,0,0": 107,
+    "0,0,1": 107,
+    "1,0,1": 107,
+    "1,0,0": 107,
+    "0,0,5": 101,
+    "1,0,5": 101,
+    "0,0,-4": 101,
+    "1,0,-4": 101,
+    "0,0,7": 101,
+    "1,0,7": 101,
+    "0,0,8": 104,
+    "0,0,9": 104,
+    "1,0,9": 104,
+    "1,0,8": 104,
+    "0,0,-6": 101,
+    "1,0,-6": 101,
+    "0,0,-8": 104,
+    "0,0,-7": 104,
+    "1,0,-8": 104,
+    "1,0,-7": 104,
+    "1,1,9": 104,
+    "0,1,9": 104,
+    "0,1,-8": 104,
+    "1,1,-8": 104,
+    "0,1,10": 104,
+    "1,1,10": 104,
+    "7,0,10": 104,
+    "7,0,9": 104,
+    "6,0,10": 104,
+    "6,1,10": 104,
+    "5,0,10": 104,
+    "5,1,10": 104,
+    "5,2,10": 104,
+    "1,2,10": 104,
+    "0,2,10": 104,
+    "4,2,10": 104,
+    "3,2,10": 104,
+    "2,2,10": 104,
+    "-6,0,10": 104,
+    "-6,0,9": 104,
+    "-5,0,10": 104,
+    "-5,1,10": 104,
+    "-5,0,9": 104,
+    "-5,1,9": 104,
+    "-4,0,10": 104,
+    "-4,1,10": 104,
+    "-4,2,10": 104,
+    "-4,0,9": 104,
+    "-4,1,9": 104,
+    "-4,2,9": 104,
+    "-1,2,10": 104,
+    "-2,2,10": 104,
+    "-3,2,10": 104,
+    "6,0,9": 104,
+    "6,1,9": 104,
+    "5,0,9": 104,
+    "5,1,9": 104,
+    "5,2,9": 104,
+    "4,2,9": 104,
+    "5,3,10": 104,
+    "5,4,10": 104,
+    "4,3,10": 104,
+    "3,3,10": 104,
+    "4,4,10": 104,
+    "3,2,9": 104,
+    "2,2,9": 104,
+    "-3,2,9": 104,
+    "-2,2,9": 104,
+    "-1,2,9": 104,
+    "-4,3,10": 104,
+    "-4,4,10": 104,
+    "-3,3,10": 104,
+    "-3,4,10": 104,
+    "-2,3,10": 104,
+    "-3,1,10": 107,
+    "-3,0,10": 107,
+    "-2,1,10": 107,
+    "-2,0,10": 107,
+    "-1,1,10": 107,
+    "-1,0,10": 107,
+    "0,0,10": 107,
+    "1,0,10": 107,
+    "2,0,10": 107,
+    "2,1,10": 107,
+    "3,0,10": 107,
+    "3,1,10": 107,
+    "4,0,10": 107,
+    "4,1,10": 107,
+    "-6,0,-9": 104,
+    "-6,0,-8": 104,
+    "-5,0,-9": 104,
+    "-5,1,-9": 104,
+    "-5,0,-8": 104,
+    "-5,1,-8": 104,
+    "-4,0,-9": 104,
+    "-4,1,-9": 104,
+    "-4,2,-9": 104,
+    "-4,5,10": 101,
+    "5,5,10": 101,
+    "-4,0,-8": 104,
+    "-4,1,-8": 104,
+    "-4,2,-8": 104,
+    "4,0,9": 107,
+    "3,0,9": 107,
+    "2,0,9": 107,
+    "-1,0,9": 107,
+    "-2,0,9": 107,
+    "-3,0,9": 107,
+    "-3,1,9": 107,
+    "-2,1,9": 107,
+    "-1,1,9": 107,
+    "2,1,9": 107,
+    "3,1,9": 107,
+    "4,1,9": 107,
+    "-3,0,-8": 107,
+    "-3,0,-9": 107,
+    "-2,0,-8": 107,
+    "-2,0,-9": 107,
+    "-1,0,-8": 107,
+    "-1,0,-9": 107,
+    "0,0,-9": 107,
+    "1,0,-9": 107,
+    "2,0,-9": 107,
+    "2,0,-8": 107,
+    "3,0,-8": 107,
+    "3,0,-9": 107,
+    "4,0,-9": 107,
+    "4,0,-8": 107,
+    "7,0,-8": 104,
+    "7,0,-9": 104,
+    "6,0,-8": 104,
+    "6,1,-8": 104,
+    "6,0,-9": 104,
+    "6,1,-9": 104,
+    "5,0,-8": 104,
+    "5,1,-8": 104,
+    "5,2,-8": 104,
+    "5,0,-9": 104,
+    "5,1,-9": 104,
+    "5,2,-9": 104,
+    "1,2,-9": 104,
+    "0,2,-9": 104,
+    "4,1,-9": 107,
+    "3,1,-9": 107,
+    "2,1,-9": 107,
+    "-3,1,-9": 107,
+    "-2,1,-9": 107,
+    "-1,1,-9": 107,
+    "1,1,-9": 104,
+    "0,1,-9": 104,
+    "4,2,-9": 104,
+    "3,2,-9": 104,
+    "2,2,-9": 104,
+    "-1,2,-9": 104,
+    "-2,2,-9": 104,
+    "-3,2,-9": 104,
+    "-3,2,-8": 104,
+    "-2,2,-8": 104,
+    "-1,2,-8": 104,
+    "4,2,-8": 104,
+    "3,2,-8": 104,
+    "2,2,-8": 104,
+    "-4,3,-9": 104,
+    "-4,4,-9": 104,
+    "-3,3,-9": 104,
+    "-3,4,-9": 104,
+    "-2,3,-9": 104,
+    "-4,5,-9": 101,
+    "5,3,-9": 104,
+    "5,4,-9": 104,
+    "4,3,-9": 104,
+    "4,4,-9": 104,
+    "3,3,-9": 104,
+    "5,5,-9": 101
+  },
+  "entities": {}
+}
