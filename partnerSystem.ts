@@ -1,29 +1,41 @@
 import { World, PlayerEntity } from 'hytopia';
+import { playerNickname } from './index';
 
 // Partner System State
+// Maps player IDs to their partner's ID (bidirectional pairing)
 let playerPartners: Record<number, number> = {};
+// Maps target player IDs to requesting player IDs for pending partner requests
 let pendingPartnerRequests: Record<number, number> = {};
 
-// Message Types for Type Safety
+// Type definitions for partner-related messages
 interface PartnerRequest {
-    type: 'requestPartner';
-    targetId: number;
+    type: 'requestPartner';    // Message type for requesting a partnership
+    targetId: number;          // ID of the player being requested
 }
 
 interface PartnerResponse {
-    type: 'respondToPartnerRequest';
-    accepted: boolean;
+    type: 'respondToPartnerRequest';  // Message type for responding to a partner request
+    accepted: boolean;                // Whether the request was accepted or rejected
 }
 
-type PartnerMessage = PartnerRequest | PartnerResponse;
+// Union type for all possible partner-related messages
+type PartnerMessage = PartnerRequest | PartnerResponse | {
+    type: 'lockPointer';  // Message type for locking the mouse pointer in the game
+};
 
 // Public Functions -------------------------------------------------------
 
-// Handle incoming partner-related messages
+/**
+ * Main message handler for all partner-related actions
+ * @param world The game world instance
+ * @param playerEntity The player entity sending the message
+ * @param data The message data
+ */
 export function handlePartnerRequest(world: World, playerEntity: PlayerEntity, data: PartnerMessage) {
-    if (!playerEntity?.id) return;
+    if (!playerEntity?.id) return;  // Exit if player entity is invalid
     const playerId = playerEntity.id;
 
+    // Route message to appropriate handler based on message type
     switch(data.type) {
         case 'requestPartner':
             processPartnerRequest(world, playerEntity, data.targetId);
@@ -31,23 +43,36 @@ export function handlePartnerRequest(world: World, playerEntity: PlayerEntity, d
         case 'respondToPartnerRequest':
             processPartnerResponse(world, playerEntity, data.accepted);
             break;
+        case 'lockPointer':
+            playerEntity.player.ui.lockPointer(true);  // Lock mouse pointer to game window
+            break;
     }
 }
 
-// Initialize partner selection UI for queued players
+/**
+ * Sets up the UI for players to select partners
+ * @param world The game world instance
+ * @param queuedPlayers Set of players waiting to select partners
+ */
 export function initializePartnerSelection(world: World, queuedPlayers: Set<PlayerEntity>) {
+    // Clear existing partnerships before starting new selection
     resetPartnerships();
     
     queuedPlayers.forEach(entity => {
         if (!entity.id) return;
         
+        // Unlock mouse pointer for partner selection UI
+        entity.player.ui.lockPointer(false);
+        
+        // Create list of available players (excluding self and those with partners)
         const availablePlayers = Array.from(queuedPlayers)
-            .filter(p => p.id !== entity.id)
+            .filter(p => p.id !== entity.id && !hasPartner(p.id!))
             .map(p => ({
                 id: p.id,
-                name: p.player.username
+                name: playerNickname[p.id!]
             }));
         
+        // Send available players list to client UI
         entity.player.ui.sendData({
             type: 'partnerSelection',
             availablePlayers
@@ -55,28 +80,53 @@ export function initializePartnerSelection(world: World, queuedPlayers: Set<Play
     });
 }
 
-// Reset partnership data
+/**
+ * Resets all partnership data to initial state
+ * Logs state before and after reset for debugging
+ */
 export function resetPartnerships() {
     playerPartners = {};
     pendingPartnerRequests = {};
 }
 
-// Get current partnerships
+/**
+ * Returns a copy of current partnerships
+ */
 export function getPartnerships(): Record<number, number> {
     return {...playerPartners};
 }
 
-// Check if player has partner
+/**
+ * Checks if a player has an active partnership
+ * @param playerId The ID of player to check
+ */
 export function hasPartner(playerId: number): boolean {
-    return playerId in playerPartners;
+    if (typeof playerId !== 'number') {
+        return false;
+    }
+    return playerId in playerPartners && typeof playerPartners[playerId] === 'number';
 }
 
-// Get partner's ID
+/**
+ * Gets the partner ID for a given player
+ * Includes validation and error correction for broken partnerships
+ * @param playerId The ID of player to get partner for
+ */
 export function getPartnerId(playerId: number): number | null {
-    return playerPartners[playerId] || null;
+    const partnerId = playerPartners[playerId] || null;
+    
+    // Fix broken partnerships where bidirectional relationship is missing
+    if (partnerId !== null && playerPartners[partnerId] !== playerId) {
+        playerPartners[partnerId] = playerId;
+    }
+    
+    return partnerId;
 }
 
-// Remove a partnership
+/**
+ * Removes partnership for both players
+ * @param playerId ID of either player in the partnership
+ */
 export function removePartnership(playerId: number) {
     const partnerId = playerPartners[playerId];
     if (partnerId) {
@@ -85,17 +135,24 @@ export function removePartnership(playerId: number) {
     }
 }
 
-// Remove a player's partnership data
+/**
+ * Cleanup function for when a player leaves
+ * @param playerId ID of the leaving player
+ */
 export function cleanupPlayerPartnerships(playerId: number) {
     removePartnership(playerId);
 }
 
 // Private Helper Functions --------------------------------------------------
 
+/**
+ * Handles incoming partner requests
+ * Validates target availability and notifies target player
+ */
 function processPartnerRequest(world: World, requester: PlayerEntity, targetId: number) {
     const requesterId = requester.id!;
     
-    // Validate target is available
+    // Check if target player is already partnered or has pending request
     if (playerPartners[targetId] || pendingPartnerRequests[targetId]) {
         requester.player.ui.sendData({
             type: 'partnerRequestFailed',
@@ -104,10 +161,10 @@ function processPartnerRequest(world: World, requester: PlayerEntity, targetId: 
         return;
     }
 
-    // Store pending request
+    // Store the pending request
     pendingPartnerRequests[targetId] = requesterId;
 
-    // Notify target player
+    // Find and notify target player
     const targetEntity = world.entityManager.getAllPlayerEntities()
         .find(p => p.id === targetId);
         
@@ -115,16 +172,20 @@ function processPartnerRequest(world: World, requester: PlayerEntity, targetId: 
         targetEntity.player.ui.sendData({
             type: 'partnerRequest',
             fromId: requesterId,
-            fromName: requester.player.username
+            fromName: playerNickname[requesterId]
         });
     }
 }
 
+/**
+ * Handles responses to partner requests
+ * Creates partnership if accepted, notifies rejection if declined
+ */
 function processPartnerResponse(world: World, responder: PlayerEntity, accepted: boolean) {
     const responderId = responder.id!;
     const requesterId = pendingPartnerRequests[responderId];
     
-    if (!requesterId) return; // No pending request
+    if (!requesterId) return; // Exit if no pending request exists
     
     delete pendingPartnerRequests[responderId];
 
@@ -135,27 +196,44 @@ function processPartnerResponse(world: World, responder: PlayerEntity, accepted:
     }
 }
 
+/**
+ * Creates a new partnership between two players
+ * Ensures clean state and notifies both players
+ */
 function createPartnership(world: World, player1Id: number, player2Id: number) {
+    // Clear any existing partnerships
+    removePartnership(player1Id);
+    removePartnership(player2Id);
+    
+    // Create bidirectional partnership
     playerPartners[player1Id] = player2Id;
     playerPartners[player2Id] = player1Id;
-
+    
+    
+    // Find both player entities
     const player1 = world.entityManager.getAllPlayerEntities()
         .find(p => p.id === player1Id);
     const player2 = world.entityManager.getAllPlayerEntities()
         .find(p => p.id === player2Id);
 
-    if (player1 && player2) {
-        const confirmMessage = {
-            type: 'partnershipFormed',
-            player1: player1.player.username,
-            player2: player2.player.username
-        };
-        
-        player1.player.ui.sendData(confirmMessage);
-        player2.player.ui.sendData(confirmMessage);
+    if (!player1 || !player2) {
+        return;
     }
+
+    // Notify both players of successful partnership
+    const confirmationMessage = {
+        type: 'partnershipFormed',
+        player1: playerNickname[player1Id],
+        player2: playerNickname[player2Id]
+    };
+    
+    player1.player.ui.sendData(confirmationMessage);
+    player2.player.ui.sendData(confirmationMessage);
 }
 
+/**
+ * Notifies requesting player that their request was rejected
+ */
 function notifyRejection(world: World, responder: PlayerEntity, requesterId: number) {
     const requesterEntity = world.entityManager.getAllPlayerEntities()
         .find(p => p.id === requesterId);
@@ -163,12 +241,7 @@ function notifyRejection(world: World, responder: PlayerEntity, requesterId: num
     if (requesterEntity) {
         requesterEntity.player.ui.sendData({
             type: 'partnerRequestRejected',
-            playerName: responder.player.username
+            playerName: playerNickname[responder.id!]
         });
     }
 }
-
-// Helper functions
-function notifyPlayers(player1: PlayerEntity, player2: PlayerEntity, message: any) {
-    // ... notification logic ...
-} 

@@ -17,6 +17,7 @@ import {
   SceneUIManager,
   Quaternion,
   PlayerUI,
+  type PlayerInput,
 } from 'hytopia';
 
 import worldMap from './assets/maps/terrain.json';
@@ -28,7 +29,7 @@ import {
     hasPartner,
     getPartnerId,
     cleanupPlayerPartnerships,
-    removePartnership
+    removePartnership,
 } from './partnerSystem';
 import { buildChamberCourse, LAVA_START_X, LAVA_START_Z } from './chamberCourse';
 
@@ -91,7 +92,7 @@ let playerTopScore: Record<number, number> = {};               // Highest score 
 const playerScoreMultipliers: Record<number, number> = {};      // Current score multiplier for each player
 
 // Power-up State
-const INITIAL_TELEPORT_CHARGES = 3;                            // Starting teleport charges for each player
+const INITIAL_TELEPORT_CHARGES = 2;                            // Starting teleport charges for each player
 let playerTeleportCharges: Record<number, number> = {};        // Number of teleport charges remaining per player
 const playerSuperChargesUsed: Record<number, Set<string>> = {}; // Super charge stations used by each player
 const superChargeProgresses: Record<string, number> = {};       // Progress of each super charge station
@@ -125,6 +126,8 @@ const LAVA_HALF_EXTENT_X = 11;         // Half width of lava area (x units from 
 const LAVA_HALF_EXTENT_Y = 12;         // Half height of lava area (y units from center point)
 const LAVA_HALF_EXTENT_Z = 11;         // Half depth of lava area (z units from center point)
 
+// Near the top with other state variables
+export const playerNickname: Record<number, string> = {};  // Track nicknames by player ID
 
 // Start the server *****************************************************************************************************************
 
@@ -169,9 +172,21 @@ startServer(world => {
      modelScale: 0.5,
    });
 
+   
+
    // Spawn player entity
   
    playerEntity.spawn(world, GAME_CONFIG.POSITIONS.LOBBY);
+
+   // Setup Teleport Input
+
+   playerEntity.controller!.onTickWithPlayerInput = (entity: PlayerEntity, input: PlayerInput) => {
+    if (input.q) {
+      console.log('Teleporting player:', playerEntity.id);
+      teleport(playerEntity);
+      input.q = false;
+    }
+   };
 
    // Set collision groups to prevent player-to-player collisions
 
@@ -252,7 +267,10 @@ startServer(world => {
      // Validate that the incoming message has a type field before processing
      if ('type' in data) {
          switch(data.type) {
-             // Handle both initial partner requests and responses to requests
+             case 'setNickname':
+                 playerNickname[playerEntity.id!] = (data as any).nickname;
+                 console.log('Stored playerNickname:', playerNickname[playerEntity.id!]);  // Debug log
+                 break;
              case 'requestPartner':      // Player is requesting someone as their partner
              case 'respondToPartnerRequest':  // Player is accepting/rejecting a request
                  if (gameState === 'starting') {
@@ -351,21 +369,24 @@ startServer(world => {
    QUEUED_PLAYER_ENTITIES.add(playerEntity);
     
    world.chatManager.sendPlayerMessage(playerEntity.player, 'You have joined the next game queue!', '00FF00');
-  
-   if (gameState === 'awaitingPlayers' && QUEUED_PLAYER_ENTITIES.size >= 1) {
-     queueGame(world);
-   }
-  
-   // Creates SceneUI element to indicate the player is in the queue
-  
-   const queuedSceneUi = new SceneUI({
-     templateId: 'player-queued',
-     attachedToEntity: playerEntity,
-     offset: { x: 0, y: 1, z: 0 },
-   });
-  
-   // Loads the SceneUI for Queued player
 
+   // Start new game if we're awaiting players
+   if (gameState === 'awaitingPlayers' && QUEUED_PLAYER_ENTITIES.size >= 1) {
+       queueGame(world);
+   }
+   
+   if (gameState === 'starting') {
+    initializePartnerSelection(world, QUEUED_PLAYER_ENTITIES);
+   }
+
+   // Creates SceneUI element to indicate the player is in the queue
+   const queuedSceneUi = new SceneUI({
+       templateId: 'player-queued',
+
+       attachedToEntity: playerEntity,
+       offset: { x: 0, y: 1, z: 0 },
+   });
+   
    queuedSceneUi.load(world);
  }
 
@@ -378,16 +399,13 @@ startServer(world => {
    gameState = 'starting';
    gameCountdownStartTime = Date.now();
 
-   // Clear any existing partnerships and selections at queue start
-
+   // Clear any existing partnerships
    resetPartnerships();
 
-   // Start partner selection for this queue
-
+   // Now that we're in 'starting' state, show partner selection to all queued players
    initializePartnerSelection(world, QUEUED_PLAYER_ENTITIES);
 
    // Start countdown updates
-  
    const countdownInterval = setInterval(() => {
      const now = Date.now();
      const timeLeft = GAME_CONFIG.START_DELAY * 1000 - (now - (gameCountdownStartTime || 0));
@@ -414,16 +432,13 @@ startServer(world => {
          type: 'gameStart'
        });
       
-       // Move player to their starting position in the arena
-
        playerEntity.setPosition(GAME_CONFIG.POSITIONS.ARENA);
-
-       // Add player to the active game players collection
-
        GAME_PLAYER_ENTITIES.add(playerEntity);
 
-      // Remove any existing scene UI elements attached to the player
+       // Re-lock pointer for gameplay
+       playerEntity.player.ui.lockPointer(true);
 
+       // Remove any existing scene UI elements
        world.sceneUIManager.getAllEntityAttachedSceneUIs(playerEntity).forEach(sceneUi => {
          sceneUi.unload();
        });
@@ -453,84 +468,15 @@ startServer(world => {
 
    GAME_PLAYER_ENTITIES.forEach(playerEntity => {
      const playerId = playerEntity.id!;
-    
+     
      ACTIVE_PLAYERS.add(playerEntity);
-    
-     // Reset player state for new game
-
+     
+     // Reset all player state for new game
      playerHeatLevel[playerId] = 1;
      playerInLava[playerId] = false;
-    
-    
-     // Add teleport cooldown tracking
-
-     const playerState = {
-       lastTeleportTime: 0,
-       TELEPORT_COOLDOWN: 500
-     };
-    
-     // Set up teleport input handling
-
-     if (playerEntity.controller) {
-       playerEntity.controller.onTickWithPlayerInput = (entity, input) => {
-         if (input.q) {
-          
-           // Check if the game is in progress and the player is active
-
-           if (gameState !== 'inProgress' || !ACTIVE_PLAYERS.has(playerEntity)) {
-             return;
-           }
-          
-           // Check if the player has any teleport charges left
-
-           if (playerTeleportCharges[playerId] <= 0) {
-             return;
-           }
-          
-           // Check if the player has used a teleport recently
-
-           const now = Date.now();
-           if (now - playerState.lastTeleportTime <= playerState.TELEPORT_COOLDOWN) {
-             return;
-           }
-          
-           // Get the partner ID for this player
-
-           const partnerId = getPartnerId(playerId);
-           if (!partnerId) {
-             return;
-           }
-          
-           // Find the partner entity in the active players collection
-
-           const partnerEntity = Array.from(ACTIVE_PLAYERS).find(p => p.id === partnerId);
-           if (!partnerEntity) {
-             return;
-           }
-          
-           // All checks passed, perform teleport
-
-           playerState.lastTeleportTime = now;                // Update last teleport time
-           playerTeleportCharges[playerId]--;                  // Decrement teleport charge
-           playerEntity.setPosition(partnerEntity.position);   // Teleport player to partner's position
-          
-           // Update UI with new charge count
-
-           playerEntity.player.ui.sendData({
-             type: 'updatePlayerState',
-             teleportCharges: playerTeleportCharges[playerId],
-           });
-         }
-       };
-     }
-   });
-
-   // Reset player score to 0
-
-   ACTIVE_PLAYERS.forEach(playerEntity => {
-     const playerId = playerEntity.id!;
+     playerTeleportCharges[playerId] = INITIAL_TELEPORT_CHARGES;
      playerScore[playerId] = 0;
-     playerScoreMultipliers[playerId] = 1; // Reset multiplier at game start
+     playerScoreMultipliers[playerId] = 1;
    });
 
   
@@ -541,23 +487,27 @@ startServer(world => {
        if (ACTIVE_PLAYERS.size > 0 && gameState === 'inProgress') {
          ACTIVE_PLAYERS.forEach(playerEntity => {
            const playerId = playerEntity.id!;
+           
            if (!playerScore[playerId]) {
              playerScore[playerId] = 0;
            }
+           
            if (!playerScoreMultipliers[playerId]) {
              playerScoreMultipliers[playerId] = 1;
            }
-        
+           
+           // Calculate and add score based on base rate and player's multiplier
            const scoreIncrease = SCORE_RATE * playerScoreMultipliers[playerId];
            playerScore[playerId] += scoreIncrease;
          });
        } else {
+
          clearInterval(scoreIntervaltoClear);
        }
      }, SCORE_INTERVAL);
-    }
+   }
 
-    updateScore();
+   updateScore();
 
    // Chamber Heat Function ****************************************************************************************
 
@@ -660,18 +610,6 @@ startServer(world => {
 
     risingLava.spawn(world, { x: LAVA_START_X + 1, y: LAVA_Y, z: LAVA_START_Z + 1 });
 
-    // Spawn Super Charges -----------------
-
-    GAME_CONFIG.SUPER_CHARGES.forEach(charge => {
-      spawnSuperCharge(world, charge.position, charge.id);
-    });
-
-    // Spawn Heat Clusters -----------------
-
-    GAME_CONFIG.HEAT_CLUSTERS.forEach(cluster => {
-      spawnHeatCluster(world, cluster.position, cluster.id);
-    });
-
     // Clear last shift leaderboard
 
     lastShiftLeaders.length = 0;
@@ -690,10 +628,7 @@ startServer(world => {
   
    gameState = 'awaitingPlayers';
 
-   // Clear teleport input handlers
-   ACTIVE_PLAYERS.forEach(playerEntity => {
-     playerEntity.controller!.onTickWithPlayerInput = undefined;
-   });
+   resetPartnerships();
 
    // Update leaderboards for all active players
    ACTIVE_PLAYERS.forEach(playerEntity => {
@@ -749,9 +684,6 @@ startServer(world => {
         }
       });
 
-      // Clear partnerships
-      resetPartnerships();
-
       // Clear game players set
 
       GAME_PLAYER_ENTITIES.clear();
@@ -772,10 +704,9 @@ startServer(world => {
     const playerId = playerEntity.id!;
     
     // Clear the heat interval if it exists
-
     if (playerHeatIntervals[playerId]) {
-      clearInterval(playerHeatIntervals[playerId]);
-      delete playerHeatIntervals[playerId];
+        clearInterval(playerHeatIntervals[playerId]);
+        delete playerHeatIntervals[playerId];
     }
 
     playerEntity.setLinearVelocity({ x: 0, y: 0, z: 0 });  // Stop player movement
@@ -784,21 +715,16 @@ startServer(world => {
     playerInLava[playerId] = false;                       // Reset lava status
     ACTIVE_PLAYERS.delete(playerEntity);                   // Remove from active players
 
-
-    // Update top score if player has a higher score than their current top score
+    removePartnership(playerId);
     
+    // Update top score if player has a higher score than their current top score
     if (playerScore[playerId] > (playerTopScore[playerId] || 0)) {
-      playerTopScore[playerId] = playerScore[playerId];
+        playerTopScore[playerId] = playerScore[playerId];
     }
-
-    // Remove partnerships
-
-    cleanupPlayerPartnerships(playerId);
     
     // Update leaderboards if player has a score
-
     if (playerScore[playerId] > 0) {
-      updateLeaderboards(playerEntity);
+        updateLeaderboards(playerEntity);
     }
   }
 
@@ -808,7 +734,7 @@ startServer(world => {
 
  function updateLeaderboards(playerEntity: PlayerEntity) {
    const entry = {
-       name: playerEntity.player.username,
+       name: playerNickname[playerEntity.id!],
        score: playerScore[playerEntity.id!]
     };
     
@@ -962,9 +888,17 @@ startServer(world => {
 
                  let isCharging = false;
                  let chargeInterval: NodeJS.Timer | null = null;
-                 let lastInputHadF = false;
-                 
-                 playerEntity.controller!.onTickWithPlayerInput = (entity, input) => {
+
+                 // Store the original handler
+                 const originalHandler = playerEntity.controller!.onTickWithPlayerInput;
+
+                 playerEntity.controller!.onTickWithPlayerInput = (entity: PlayerEntity, input: Partial<Record<string | number | symbol, boolean>>) => {
+                   // Call original handler first to maintain teleport functionality
+                   if (originalHandler) {
+                     originalHandler(entity, input);
+                   }
+
+                   // Handle charging functionality
                    if (input.f && !isCharging && !playerSuperChargesUsed[playerId].has(chargeId)) {
                      isCharging = true;
                      let chargeTime = 0;
@@ -992,8 +926,6 @@ startServer(world => {
                            type: 'superChargeState',
                            state: 'complete'
                          });
-                         
-                         playerEntity.controller!.onTickWithPlayerInput = undefined;
                        }
                      }, 100);
                    } else if (!input.f && isCharging) {
@@ -1008,12 +940,8 @@ startServer(world => {
                        state: 'reset'
                      });
                    }
-                   lastInputHadF = input.f === true;
                  };
                } else {
-                 if (playerEntity.controller) {
-                   playerEntity.controller.onTickWithPlayerInput = undefined;
-                 }
                  playerEntity.player.ui.sendData({
                    type: 'superChargeState',
                    state: 'exit'
@@ -1037,6 +965,55 @@ startServer(world => {
   volume: 0.3,
  }).play(world);
 
+
+ // TELEPORT FUNCTION ********************************************************************************************
+
+ function teleport(playerEntity: PlayerEntity) {
+  const playerId = playerEntity.id!;
+  
+  // Check if player has teleport charges remaining
+  if (!playerTeleportCharges[playerId] || playerTeleportCharges[playerId] <= 0) {
+    world.chatManager.sendPlayerMessage(playerEntity.player, 'No Teleport Charges Left!', 'FFFFFF');  // White text
+    return;
+  }
+
+  // Get partner ID and verify partner is active
+  const partnerId = getPartnerId(playerId);
+  if (!partnerId) {
+    world.chatManager.sendPlayerMessage(playerEntity.player, 'No Partner Found!', 'FFFFFF');  // White text
+    return;
+  }
+
+  // Find partner entity and verify they are still active
+  
+  const partnerEntity = Array.from(ACTIVE_PLAYERS)
+    .find(entity => entity.id === partnerId);
+
+  if (!partnerEntity || !ACTIVE_PLAYERS.has(partnerEntity)) {
+    world.chatManager.sendPlayerMessage(playerEntity.player, 'No Partner Found!', 'FFFFFF');  // White text
+    return;
+  }
+
+  // Teleport to partner's location
+  playerEntity.setPosition(partnerEntity.position);
+  
+  // Deduct teleport charge
+  playerTeleportCharges[playerId]--;
+
+  // Send success messages to both players
+  world.chatManager.sendPlayerMessage(playerEntity.player, 
+    `Teleported to ${playerNickname[partnerId]}!`, '00FF00');  // Green text
+  
+  world.chatManager.sendPlayerMessage(partnerEntity.player, 
+    `${playerNickname[playerId]} teleported to you!`, '00FF00');  // Green text
+
+  // Notify player of successful teleport and remaining charges
+  playerEntity.player.ui.sendData({
+    type: 'teleportSuccess',
+    remainingCharges: playerTeleportCharges[playerId]
+  });
+  console.log(`[TELEPORT] Success - Teleport completed for player ${playerId}`);
+ }
 });
 
 
