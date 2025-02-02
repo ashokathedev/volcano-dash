@@ -32,6 +32,7 @@ import {
     removePartnership,
 } from './partnerSystem';
 import { buildChamberCourse, LAVA_START_X, LAVA_START_Z } from './chamberCourse';
+import { buildPracticeCourse, PRACTICE_START_X, PRACTICE_START_Z } from './practiceCourse';
 
 
 // Game Config *****************************************************************************************
@@ -46,7 +47,7 @@ const GAME_CONFIG = {
     ARENA: { x: 14, y: 5, z: -12},      // Arena Spawn Point
     JOIN_NPC: { x: -20, y: 5, z: 4 },  // Shift Manager Spawn Point (***** UPDATE NAME TO SHIFT MANAGER! ***)
     LOBBY: { x: 0, y: 4, z: 0 },       // Lobby Repawn Point after shift ends
-    GAME_JOIN: { x: 24, y: 13, z: -4 }, // Initial spawn point for players joining the server { x: -33, y: 4, z: 1 }
+    GAME_JOIN: { x: 3, y: 4, z: 0 }, // Initial spawn point for players joining the server { x: -33, y: 4, z: 1 }
   },
 
   // Spawn points and IDs for super charges
@@ -59,7 +60,12 @@ const GAME_CONFIG = {
     { id: 'charge5', position: { x: 7, y: 25, z: -13 } },   // Level D  
     { id: 'charge6', position: { x: 15, y: 25, z: -21 } },    // Level D 
     { id: 'charge7', position: { x: 23, y: 25, z: -13 } },    //  Level D 
-    { id: 'charge8', position: { x: 15, y: 25, z: -5 } }     // Level D 
+    { id: 'charge8', position: { x: 15, y: 25, z: -5 } },     // Level D 
+    { id: 'charge9', position: { x: 15, y: 37, z: -7 } },     // Level D 
+    { id: 'charge10', position: { x: 15, y: 37, z: -19 } },     // Level D 
+
+   
+
   ],
 
 
@@ -73,6 +79,8 @@ const GAME_CONFIG = {
     { id: 'cluster4', position: { x: 14, y: 17, z: -14 } },  // Level C Cluser
     { id: 'cluster5', position: { x: 16, y: 17, z: -12 } },  // Level C Cluser
     { id: 'cluster6', position: { x: 14, y: 17, z: -12 } },  // Level C Cluser
+    { id: 'cluster7', position: { x: 23, y: 32, z: -13 } },  // Level E Cluser
+    { id: 'cluster8', position: { x: 8, y: 32, z: -13 } },  // Level E Cluser
   ]
 };
 
@@ -130,7 +138,7 @@ const SCORE_INTERVAL = 10;             // How often (ms) score updates
 const LAVA_RISE_VELOCITY = 0.5;        // How fast lava rises
 const LAVA_RISE_DELAY = 1;             // Time before lava starts rising (secs)
 const LAVA_Y = -12;                    // Y center point coordinate for rising lava
-const LAVA_MAX_HEIGHT = 5;             // Maximum height lava center point can rise to
+const LAVA_MAX_HEIGHT = 12;             // Maximum height lava center point can rise to
 
 // Lava Dimensions
 const LAVA_HALF_EXTENT_X = 11;         // Half width of lava area (x units from center point)
@@ -139,6 +147,9 @@ const LAVA_HALF_EXTENT_Z = 11;         // Half depth of lava area (z units from 
 
 // Near the top with other state variables
 export const playerNickname: Record<number, string> = {};  // Track nicknames by player ID
+
+// Add this near the top with other game state variables
+const playerChargingState: Record<number, boolean> = {};  // Track if player is currently charging
 
 // Start the server *****************************************************************************************************************
 
@@ -152,9 +163,9 @@ startServer(world => {
   world.onPlayerLeave = player => onPlayerLeave(world, player);
   spawnJoinNpc(world);
   
-  // Build the chamber course
-
+  // Build both courses
   buildChamberCourse(world);
+  buildPracticeCourse(world);
 
   // Spawn heat clusters at each position
 
@@ -254,7 +265,7 @@ startServer(world => {
    // Setup a first person camera for the player
 
    player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
-   player.camera.setOffset({ x: 0, y: 0.4, z: 0 });
+   player.camera.setOffset({ x: 0, y: 0.2, z: 0 });
    player.camera.setModelHiddenNodes(['head', 'neck']);
    player.camera.setForwardOffset(0.3);
 
@@ -694,6 +705,9 @@ startServer(world => {
           clearInterval(playerHeatIntervals[playerEntity.id!]);
           delete playerHeatIntervals[playerEntity.id!];
         }
+
+        // Reset charging state
+        playerChargingState[playerEntity.id!] = false;
       });
 
       // Clear game players set
@@ -738,6 +752,9 @@ startServer(world => {
     if (playerScore[playerId] > 0) {
         updateLeaderboards(playerEntity);
     }
+
+    // Reset charging state
+    playerChargingState[playerId] = false;
   }
 
  // Update Leaderboards Function ****************************************************************************************
@@ -901,18 +918,16 @@ startServer(world => {
                  let isCharging = false;
                  let chargeInterval: NodeJS.Timer | null = null;
 
-                 // Store the original handler
                  const originalHandler = playerEntity.controller!.onTickWithPlayerInput;
 
                  playerEntity.controller!.onTickWithPlayerInput = (entity: PlayerEntity, input: Partial<Record<string | number | symbol, boolean>>) => {
-                   // Call original handler first to maintain teleport functionality
                    if (originalHandler) {
                      originalHandler(entity, input);
                    }
 
-                   // Handle charging functionality
-                   if (input.f && !isCharging && !playerSuperChargesUsed[playerId].has(chargeId)) {
+                   if (input.f && !isCharging && !playerSuperChargesUsed[playerId].has(chargeId) && !playerChargingState[playerId]) {
                      isCharging = true;
+                     playerChargingState[playerId] = true;  // Mark player as charging
                      let chargeTime = 0;
                      
                      chargeInterval = setInterval(() => {
@@ -930,9 +945,10 @@ startServer(world => {
                            clearInterval(chargeInterval);
                            chargeInterval = null;
                          }
-                         playerScore[playerId] *= 2;
+                         playerScore[playerId] = Math.floor(playerScore[playerId] * 2);  // Ensure integer result
                          playerSuperChargesUsed[playerId].add(chargeId);
                          isCharging = false;
+                         playerChargingState[playerId] = false;  // Clear charging state
                          
                          playerEntity.player.ui.sendData({
                            type: 'superChargeState',
@@ -946,6 +962,7 @@ startServer(world => {
                        chargeInterval = null;
                      }
                      isCharging = false;
+                     playerChargingState[playerId] = false;  // Clear charging state
                      
                      playerEntity.player.ui.sendData({
                        type: 'superChargeState',
@@ -1026,6 +1043,82 @@ startServer(world => {
   });
   console.log(`[TELEPORT] Success - Teleport completed for player ${playerId}`);
  }
+
+ // Chamber Wall Block Entities  -----------------------------------
+
+ const frontChamberWall = new Entity({
+  blockTextureUri: 'blocks/lavaBrick.png',
+  blockHalfExtents: { x: 12, y: 11, z: 0.5 },
+  rigidBodyOptions: {
+    type: RigidBodyType.KINEMATIC_VELOCITY,
+  },
+});
+
+frontChamberWall.spawn(world, { x: 15, y: 28, z: -1.5 });
+
+const backChamberWall = new Entity({
+  blockTextureUri: 'blocks/lavaBrick.png',
+  blockHalfExtents: { x: 12, y: 11, z: 0.5 },
+  rigidBodyOptions: {
+    type: RigidBodyType.KINEMATIC_VELOCITY,
+  },
+});
+
+
+backChamberWall.spawn(world, { x: 15, y: 28, z: -24.5 });
+
+frontChamberWall.spawn(world, { x: 15, y: 28, z: -1.5 });
+
+const rightChamberWall = new Entity({
+  blockTextureUri: 'blocks/lavaBrick.png',
+  blockHalfExtents: { x: 0.5, y: 11, z: 11.5 },
+  rigidBodyOptions: {
+    type: RigidBodyType.KINEMATIC_VELOCITY,
+  },
+});
+
+
+rightChamberWall.spawn(world, { x: 26.5, y: 28, z: -13.5 });
+
+const frontPracticeWall = new Entity({
+  blockTextureUri: 'blocks/lavaBrick.png',
+  blockHalfExtents: { x: 12, y: 11, z: 0.5 },
+  rigidBodyOptions: {
+    type: RigidBodyType.KINEMATIC_VELOCITY,
+  },
+});
+
+frontPracticeWall.spawn(world, { x: -8, y: 28, z: -1.5 });
+
+const leftPracticeWall = new Entity({
+  blockTextureUri: 'blocks/lavaBrick.png',
+  blockHalfExtents: { x: 0.5, y: 22, z: 11.5 },
+  rigidBodyOptions: {
+    type: RigidBodyType.KINEMATIC_VELOCITY,
+  },
+});
+
+
+leftPracticeWall.spawn(world, { x: -19.5, y: 17, z: -13.5 });
+
+const backPracticeWall = new Entity({
+  blockTextureUri: 'blocks/lavaBrick.png',
+  blockHalfExtents: { x: 12, y: 22, z: 0.5 },
+  rigidBodyOptions: {
+    type: RigidBodyType.KINEMATIC_VELOCITY,
+  },
+});
+
+
+
+backPracticeWall.spawn(world, { x: -8, y: 17, z: -24.5 });
+
+
+
+
+
+
+
 });
 
 
