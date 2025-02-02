@@ -39,7 +39,7 @@ import { buildChamberCourse, LAVA_START_X, LAVA_START_Z } from './chamberCourse'
 const GAME_CONFIG = {
 
   START_DELAY: 15, // Countdown before shift begins - players can select their partner
-
+ 
   // Spawn Points for players and NPCS
 
   POSITIONS: { 
@@ -55,8 +55,13 @@ const GAME_CONFIG = {
     { id: 'charge1', position: { x: 24, y: 12, z: -4 } },   // Level B Corner 
     { id: 'charge2', position: { x: 6, y: 12, z: -4 } },    // Level B Corner
     { id: 'charge3', position: { x: 6, y: 12, z: -22 } },    //  Level B Corner
-    { id: 'charge4', position: { x: 24, y: 12, z: -22 } }     // Level B Corner
+    { id: 'charge4', position: { x: 24, y: 12, z: -22 } },     // Level B Corner
+    { id: 'charge5', position: { x: 7, y: 25, z: -13 } },   // Level D  
+    { id: 'charge6', position: { x: 15, y: 25, z: -21 } },    // Level D 
+    { id: 'charge7', position: { x: 23, y: 25, z: -13 } },    //  Level D 
+    { id: 'charge8', position: { x: 15, y: 25, z: -5 } }     // Level D 
   ],
+
 
 
   // Spawn points and IDs for heat clusters
