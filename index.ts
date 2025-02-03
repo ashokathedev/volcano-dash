@@ -17,6 +17,8 @@ import {
   SceneUIManager,
   Quaternion,
   PlayerUI,
+  Light,
+  LightType,
   type PlayerInput,
 } from 'hytopia';
 
@@ -45,9 +47,9 @@ const GAME_CONFIG = {
 
   POSITIONS: { 
     ARENA: { x: 14, y: 5, z: -12},      // Arena Spawn Point
-    JOIN_NPC: { x: -20, y: 5, z: 4 },  // Shift Manager Spawn Point (***** UPDATE NAME TO SHIFT MANAGER! ***)
+    JOIN_NPC: { x: 3, y: 5, z: 13 },  // Shift Manager Spawn Point (***** UPDATE NAME TO SHIFT MANAGER! ***)
     LOBBY: { x: 0, y: 4, z: 0 },       // Lobby Repawn Point after shift ends
-    GAME_JOIN: { x: 3, y: 4, z: 0 }, // Initial spawn point for players joining the server { x: -33, y: 4, z: 1 }
+    GAME_JOIN: { x: 3, y: 4, z: 28 }, // Initial spawn point for players joining the server { x: -33, y: 4, z: 1 }
   },
 
   // Spawn points and IDs for super charges
@@ -138,11 +140,11 @@ const SCORE_INTERVAL = 10;             // How often (ms) score updates
 const LAVA_RISE_VELOCITY = 0.5;        // How fast lava rises
 const LAVA_RISE_DELAY = 1;             // Time before lava starts rising (secs)
 const LAVA_Y = -12;                    // Y center point coordinate for rising lava
-const LAVA_MAX_HEIGHT = 12;             // Maximum height lava center point can rise to
+const LAVA_MAX_HEIGHT = 24;             // Maximum height lava center point can rise to
 
 // Lava Dimensions
 const LAVA_HALF_EXTENT_X = 11;         // Half width of lava area (x units from center point)
-const LAVA_HALF_EXTENT_Y = 12;         // Half height of lava area (y units from center point)
+const LAVA_HALF_EXTENT_Y = 24;         // Half height of lava area (y units from center point)
 const LAVA_HALF_EXTENT_Z = 11;         // Half depth of lava area (z units from center point)
 
 // Near the top with other state variables
@@ -162,6 +164,7 @@ startServer(world => {
   world.onPlayerJoin = player => onPlayerJoin(world, player);
   world.onPlayerLeave = player => onPlayerLeave(world, player);
   spawnJoinNpc(world);
+  spawnPracticeNpc(world);
   
   // Build both courses
   buildChamberCourse(world);
@@ -195,7 +198,7 @@ startServer(world => {
      modelScale: 0.5,
    });
 
-   
+     
 
    // Spawn player entity
   
@@ -369,7 +372,7 @@ startServer(world => {
      },
    });
   
-   joinNpc.spawn(world, GAME_CONFIG.POSITIONS.JOIN_NPC, { x: 0, y: 3, z: 0, w: 3 });
+   joinNpc.spawn(world, GAME_CONFIG.POSITIONS.JOIN_NPC, { x: 0, y: Math.PI, z: 0, w: 0 });
   
    const npcMessageUI = new SceneUI({
      templateId: 'join-npc-message',
@@ -379,7 +382,37 @@ startServer(world => {
    
    npcMessageUI.load(world);
 
- }
+  }
+
+  // Practice NPC Function ****************************************************************************************
+
+ function spawnPracticeNpc(world: World) {
+   const practiceNpc = new Entity({
+     name: 'Practice NPC',
+     modelUri: 'models/npcs/mindflayer.gltf',
+     modelLoopedAnimations: ['idle'],
+     modelScale: 0.6,
+     rigidBodyOptions: {
+       enabledPositions: { x: false, y: true, z: false },
+       enabledRotations: { x: true, y: true, z: true },
+     },
+   });
+ 
+   practiceNpc.spawn(world, {x: -16, y: 5, z: 3}, { x: 0, y: Math.PI, z: 0, w: 0 });
+ 
+
+   const practiceNpcMessageUI = new SceneUI({
+     templateId: 'practice-npc-message',
+     attachedToEntity: practiceNpc,
+     viewDistance: 12,
+     offset: { x: 0, y: 2.5, z: 0 },
+   });
+
+  
+   practiceNpcMessageUI.load(world);
+
+  }
+
 
  // Add Player to Queue Function ******************************************************************************************
  // This function handles the queueing process for players waiting to start a new game.
@@ -1047,7 +1080,7 @@ startServer(world => {
  // Chamber Wall Block Entities  -----------------------------------
 
  const frontChamberWall = new Entity({
-  blockTextureUri: 'blocks/lavaBrick.png',
+  blockTextureUri: 'blocks/blackStone.png',
   blockHalfExtents: { x: 12, y: 11, z: 0.5 },
   rigidBodyOptions: {
     type: RigidBodyType.KINEMATIC_VELOCITY,
@@ -1057,7 +1090,7 @@ startServer(world => {
 frontChamberWall.spawn(world, { x: 15, y: 28, z: -1.5 });
 
 const backChamberWall = new Entity({
-  blockTextureUri: 'blocks/lavaBrick.png',
+  blockTextureUri: 'blocks/blackStone.png',
   blockHalfExtents: { x: 12, y: 11, z: 0.5 },
   rigidBodyOptions: {
     type: RigidBodyType.KINEMATIC_VELOCITY,
@@ -1067,10 +1100,8 @@ const backChamberWall = new Entity({
 
 backChamberWall.spawn(world, { x: 15, y: 28, z: -24.5 });
 
-frontChamberWall.spawn(world, { x: 15, y: 28, z: -1.5 });
-
 const rightChamberWall = new Entity({
-  blockTextureUri: 'blocks/lavaBrick.png',
+  blockTextureUri: 'blocks/blackStone.png',
   blockHalfExtents: { x: 0.5, y: 11, z: 11.5 },
   rigidBodyOptions: {
     type: RigidBodyType.KINEMATIC_VELOCITY,
@@ -1081,7 +1112,7 @@ const rightChamberWall = new Entity({
 rightChamberWall.spawn(world, { x: 26.5, y: 28, z: -13.5 });
 
 const frontPracticeWall = new Entity({
-  blockTextureUri: 'blocks/lavaBrick.png',
+  blockTextureUri: 'blocks/blackStone.png',
   blockHalfExtents: { x: 12, y: 11, z: 0.5 },
   rigidBodyOptions: {
     type: RigidBodyType.KINEMATIC_VELOCITY,
@@ -1091,7 +1122,7 @@ const frontPracticeWall = new Entity({
 frontPracticeWall.spawn(world, { x: -8, y: 28, z: -1.5 });
 
 const leftPracticeWall = new Entity({
-  blockTextureUri: 'blocks/lavaBrick.png',
+  blockTextureUri: 'blocks/blackStone.png',
   blockHalfExtents: { x: 0.5, y: 22, z: 11.5 },
   rigidBodyOptions: {
     type: RigidBodyType.KINEMATIC_VELOCITY,
@@ -1102,7 +1133,7 @@ const leftPracticeWall = new Entity({
 leftPracticeWall.spawn(world, { x: -19.5, y: 17, z: -13.5 });
 
 const backPracticeWall = new Entity({
-  blockTextureUri: 'blocks/lavaBrick.png',
+  blockTextureUri: 'blocks/blackStone.png',
   blockHalfExtents: { x: 12, y: 22, z: 0.5 },
   rigidBodyOptions: {
     type: RigidBodyType.KINEMATIC_VELOCITY,
@@ -1113,11 +1144,49 @@ const backPracticeWall = new Entity({
 
 backPracticeWall.spawn(world, { x: -8, y: 17, z: -24.5 });
 
+const lobbyRoof = new Entity({
+  blockTextureUri: 'blocks/blackStone.png',
+  blockHalfExtents: { x: 36, y: 0.5, z: 26 },
+  rigidBodyOptions: {
+    type: RigidBodyType.KINEMATIC_VELOCITY,
+  },
+});
 
 
+lobbyRoof.spawn(world, { x: 4, y: 17.5, z: 25 });
 
 
+// Lighting ****************************************************************************************
 
+world.setAmbientLightIntensity(0.5); // Reduce ambient light intensity
+world.setAmbientLightColor({ r: 218, g: 127, b: 80 }); // slightly purple
+
+// Create purple point lights
+const orangeLightPositions = [
+  { x: -6, y: 2, z: 26 },
+  { x: -9, y: 2, z: 26 },
+  { x: 13, y: 2, z: 12 },
+  { x: 17, y: 2, z: 12 }
+];
+
+orangeLightPositions.forEach(position => {
+  (new Light({
+    color: { r: 218, g: 127, b: 80 },
+    intensity: 40,
+    position,
+  })).spawn(world);
+});
+
+ // large ceiling spotlight
+ (new Light({
+  type: LightType.SPOTLIGHT,
+  angle: Math.PI / 8,
+  color: { r: 255, g: 255, b: 255 },
+  intensity: 40,
+  penumbra: 0.5,
+  position: { x: 0, y: 40, z: 0 },
+  trackedPosition: { x: 0, y: 0, z: 0 },
+})).spawn(world);
 
 });
 

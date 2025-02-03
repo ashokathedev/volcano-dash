@@ -326,6 +326,10 @@
     return document.getElementById('join-npc-message').content.cloneNode(true);
   });
 
+  hytopia.registerSceneUITemplate('practice-npc-message', () => {
+    return document.getElementById('practice-npc-message').content.cloneNode(true);
+  });
+
   hytopia.registerSceneUITemplate('player-queued', () => {
     return document.getElementById('player-queued').content.cloneNode(true);
   });
@@ -571,6 +575,14 @@
   <div class="join-npc-message">
     <h1>Join the Next Shift!</h1>
     <p>Come close to me to grab your gear</p>
+    <p class="controls">(WASD to move, Spacebar to jump)</p>
+  </div>
+</template>
+
+<template id="practice-npc-message">
+  <div class="join-npc-message">
+    <h1>Practice Room ==></h1>
+    <p>Head this way to practice!</p>
     <p class="controls">(WASD to move, Spacebar to jump)</p>
   </div>
 </template>
