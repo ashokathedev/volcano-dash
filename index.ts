@@ -19,6 +19,7 @@ import {
   PlayerUI,
   Light,
   LightType,
+  type PlayerCameraOrientation,
   type PlayerInput,
 } from 'hytopia';
 
@@ -35,6 +36,7 @@ import {
 } from './partnerSystem';
 import { buildChamberCourse, LAVA_START_X, LAVA_START_Z } from './chamberCourse';
 import { buildPracticeCourse, PRACTICE_START_X, PRACTICE_START_Z } from './practiceCourse';
+import { spawnHazmatSuit, despawnHazmatSuit } from './hazmatSuit';
 
 
 // Game Config *****************************************************************************************
@@ -49,7 +51,7 @@ const GAME_CONFIG = {
     ARENA: { x: 14, y: 5, z: -12},      // Arena Spawn Point
     JOIN_NPC: { x: 3, y: 5, z: 13 },  // Shift Manager Spawn Point (***** UPDATE NAME TO SHIFT MANAGER! ***)
     LOBBY: { x: 0, y: 4, z: 0 },       // Lobby Repawn Point after shift ends
-    GAME_JOIN: { x: 3, y: 4, z: 28 }, // Initial spawn point for players joining the server { x: -33, y: 4, z: 1 }
+    GAME_JOIN: { x: 3, y: 4, z: 28 }, // Initial spawn point for players joining the server { x: 3, y: 4, z: 28 }
   },
 
   // Spawn points and IDs for super charges
@@ -58,13 +60,14 @@ const GAME_CONFIG = {
     { id: 'charge1', position: { x: 24, y: 12, z: -4 } },   // Level B Corner 
     { id: 'charge2', position: { x: 6, y: 12, z: -4 } },    // Level B Corner
     { id: 'charge3', position: { x: 6, y: 12, z: -22 } },    //  Level B Corner
-    { id: 'charge4', position: { x: 24, y: 12, z: -22 } },     // Level B Corner
+    { id: 'charge4', position: { x: 24, y: 12, z: -22 } },     // Level B Corner 
     { id: 'charge5', position: { x: 7, y: 25, z: -13 } },   // Level D  
     { id: 'charge6', position: { x: 15, y: 25, z: -21 } },    // Level D 
     { id: 'charge7', position: { x: 23, y: 25, z: -13 } },    //  Level D 
     { id: 'charge8', position: { x: 15, y: 25, z: -5 } },     // Level D 
     { id: 'charge9', position: { x: 15, y: 37, z: -7 } },     // Level D 
     { id: 'charge10', position: { x: 15, y: 37, z: -19 } },     // Level D 
+  
 
    
 
@@ -75,14 +78,14 @@ const GAME_CONFIG = {
   // Spawn points and IDs for heat clusters
 
   HEAT_CLUSTERS: [
-     { id: 'cluster1', position: { x: 15, y: 9, z: -4 } },  // Level A Front
-    { id: 'cluster2', position: { x: 15, y: 9, z: -22 } },  // Level A Back
-    { id: 'cluster3', position: { x: 16, y: 17, z: -14 } },  // Level C Cluser
-    { id: 'cluster4', position: { x: 14, y: 17, z: -14 } },  // Level C Cluser
-    { id: 'cluster5', position: { x: 16, y: 17, z: -12 } },  // Level C Cluser
-    { id: 'cluster6', position: { x: 14, y: 17, z: -12 } },  // Level C Cluser
-    { id: 'cluster7', position: { x: 23, y: 32, z: -13 } },  // Level E Cluser
-    { id: 'cluster8', position: { x: 8, y: 32, z: -13 } },  // Level E Cluser
+     { id: 'cluster1', position: { x: 15, y: 8, z: -4 } },  // Level A Front
+    { id: 'cluster2', position: { x: 15, y: 8, z: -22 } },  // Level A Back
+    { id: 'cluster3', position: { x: 17, y: 17, z: -15 } },  // Level C Cluster
+    { id: 'cluster4', position: { x: 13, y: 17, z: -15 } },  // Level C Cluster
+    { id: 'cluster5', position: { x: 17, y: 17, z: -11 } },  // Level C Cluster
+    { id: 'cluster6', position: { x: 13, y: 17, z: -11 } },  // Level C Cluster
+    { id: 'cluster7', position: { x: 23, y: 32, z: -13 } },  // Level E Cluster
+    { id: 'cluster8', position: { x: 7, y: 32, z: -13 } },  // Level E Cluster
   ]
 };
 
@@ -139,12 +142,12 @@ const SCORE_INTERVAL = 10;             // How often (ms) score updates
 // Lava Arena Configuration
 const LAVA_RISE_VELOCITY = 0.5;        // How fast lava rises
 const LAVA_RISE_DELAY = 1;             // Time before lava starts rising (secs)
-const LAVA_Y = -12;                    // Y center point coordinate for rising lava
-const LAVA_MAX_HEIGHT = 24;             // Maximum height lava center point can rise to
+const LAVA_Y = -17;                    // Y center point coordinate for rising lava
+const LAVA_MAX_HEIGHT = 17;             // Maximum height lava center point can rise to
 
 // Lava Dimensions
 const LAVA_HALF_EXTENT_X = 11;         // Half width of lava area (x units from center point)
-const LAVA_HALF_EXTENT_Y = 24;         // Half height of lava area (y units from center point)
+const LAVA_HALF_EXTENT_Y = 17;         // Half height of lava area (y units from center point)
 const LAVA_HALF_EXTENT_Z = 11;         // Half depth of lava area (z units from center point)
 
 // Near the top with other state variables
@@ -158,7 +161,7 @@ const playerChargingState: Record<number, boolean> = {};  // Track if player is 
 
 startServer(world => {
   
-  // world.simulation.enableDebugRendering(true); // Enable debug rendering of the physics simulation.
+  //world.simulation.enableDebugRendering(true); // Enable debug rendering of the physics simulation.
 
   world.loadMap(worldMap); //load map
   world.onPlayerJoin = player => onPlayerJoin(world, player);
@@ -182,12 +185,18 @@ startServer(world => {
     spawnSuperCharge(world, charge.position, charge.id);
   });
 
+ // Spawn the power up examples
+
+  clusterExample(world);
+  superChargeExample(world);
+
+
 
 
 
  // Player Join Functions **************************************************************************************
 
- // Create player entity
+ // Create and spawn player entity
 
  function onPlayerJoin(world: World, player: Player) {
    const playerEntity = new PlayerEntity({
@@ -198,13 +207,10 @@ startServer(world => {
      modelScale: 0.5,
    });
 
-     
-
-   // Spawn player entity
   
    playerEntity.spawn(world, GAME_CONFIG.POSITIONS.GAME_JOIN);
 
-   // Setup Teleport Input
+      // Setup Teleport Input
 
    playerEntity.controller!.onTickWithPlayerInput = (entity: PlayerEntity, input: PlayerInput) => {
     if (input.q) {
@@ -273,6 +279,7 @@ startServer(world => {
    player.camera.setForwardOffset(0.3);
 
 
+
    // Respawn player at when they Overheat curing the game
 
    playerEntity.onTick = () => {
@@ -315,10 +322,12 @@ startServer(world => {
         }
      }
    };
+
  }
 
 
- // Player Leave Function and Cleanup ****************************************************************************************
+
+ // Player Leave Function and Cleanup **********************************************************
 
  function onPlayerLeave(world: World, player: Player) {
    world.entityManager.getAllPlayerEntities().forEach((entity: PlayerEntity) => {
@@ -326,24 +335,24 @@ startServer(world => {
         QUEUED_PLAYER_ENTITIES.delete(entity);
      }
 
-     // Clear any existing heat intervals
+    // Clear any existing heat intervals
 
-     if (playerHeatIntervals[entity.id!]) {
-       clearInterval(playerHeatIntervals[entity.id!]);
-       delete playerHeatIntervals[entity.id!];
-     }
+    if (playerHeatIntervals[entity.id!]) {
+      clearInterval(playerHeatIntervals[entity.id!]);
+      delete playerHeatIntervals[entity.id!];
+    }
     
-     // Clear score multipliers and super charges used
+    // Clear score multipliers and super charges used
     
-     delete playerScoreMultipliers[entity.id!];
-     delete playerSuperChargesUsed[entity.id!];
+    delete playerScoreMultipliers[entity.id!];
+    delete playerSuperChargesUsed[entity.id!];
     
-     // Handle overheat and despawn the player
+    // Handle overheat and despawn the player
     
- overHeat(entity);
- entity.despawn();
-   });
- }
+    overHeat(entity);
+    entity.despawn();
+    });
+  }
 
  // Join NPC Function and UI ****************************************************************************************
 
@@ -413,37 +422,94 @@ startServer(world => {
 
   }
 
+  // Cluster Example ****************************************************************************************
 
- // Add Player to Queue Function ******************************************************************************************
+ function clusterExample(world: World) {
+  const clusterExample = new Entity({
+    name: 'Cluster Example',
+    modelUri: 'models/volcano-dash/energyCluster.gltf',
+    modelLoopedAnimations: ['idle'],
+    modelScale: 2,
+    opacity: 0.5,
+     rigidBodyOptions: {
+       type: RigidBodyType.KINEMATIC_POSITION,
+     }
+  });
+ 
+  clusterExample.spawn(world, {x: -23, y: 3, z: 14});
+ 
+  const clusterExampleUI = new SceneUI({
+    templateId: 'clusterExample',
+    attachedToEntity: clusterExample,
+    offset: { x: 0, y: 2.5, z: 0 },
+  });
+  
+  clusterExampleUI.load(world);
+ }
+
+
+  // SuperCharge Example ****************************************************************************************
+
+  function superChargeExample(world: World) {
+    const superChargeExample = new Entity({
+
+      name: 'SuperCharge Example',
+      modelUri: 'models/volcano-dash/hazmatSuitOnStand.gltf',
+      modelLoopedAnimations: ['idle'],
+      modelScale: 0.5,
+      
+        rigidBodyOptions: {
+          type: RigidBodyType.KINEMATIC_POSITION,
+        }
+    });
+     
+    superChargeExample.spawn(world, {x: 0, y: 2, z: 12}, { x: 0, y: Math.PI, z: 0, w: 0 });
+     
+
+    const superChargeExampleUI = new SceneUI({
+      templateId: 'superChargeExample',
+      attachedToEntity: superChargeExample,
+      offset: { x: 0, y: 2.5, z: 0 },
+    });
+
+      
+    superChargeExampleUI.load(world);
+  }
+
+
+
+ // Add Player to Queue Function ******************************************************************************
  // This function handles the queueing process for players waiting to start a new game.
  // It checks if the game is ready to start and if there are enough players to start.
  // If so, it queues the players and starts the game.
+ 
 
  function addPlayerEntityToQueue(world: World, playerEntity: PlayerEntity) {
-   if (QUEUED_PLAYER_ENTITIES.has(playerEntity)) return;
-    
-   QUEUED_PLAYER_ENTITIES.add(playerEntity);
-    
-   world.chatManager.sendPlayerMessage(playerEntity.player, 'You have joined the next game queue!', '00FF00');
+   if (!QUEUED_PLAYER_ENTITIES.has(playerEntity)) {
+     QUEUED_PLAYER_ENTITIES.add(playerEntity);
+     // Spawn the hazmat suit when player joins queue
+     spawnHazmatSuit(world, playerEntity);
+     world.chatManager.sendPlayerMessage(playerEntity.player, 'You have joined the next game queue!', '00FF00');
 
-   // Start new game if we're awaiting players
-   if (gameState === 'awaitingPlayers' && QUEUED_PLAYER_ENTITIES.size >= 1) {
-       queueGame(world);
+     // Start new game if we're awaiting players
+     if (gameState === 'awaitingPlayers' && QUEUED_PLAYER_ENTITIES.size >= 1) {
+         queueGame(world);
+     }
+     
+     if (gameState === 'starting') {
+      initializePartnerSelection(world, QUEUED_PLAYER_ENTITIES);
+     }
+
+     // Creates SceneUI element to indicate the player is in the queue
+     const queuedSceneUi = new SceneUI({
+         templateId: 'player-queued',
+
+         attachedToEntity: playerEntity,
+         offset: { x: 0, y: 1, z: 0 },
+     });
+     
+     queuedSceneUi.load(world);
    }
-   
-   if (gameState === 'starting') {
-    initializePartnerSelection(world, QUEUED_PLAYER_ENTITIES);
-   }
-
-   // Creates SceneUI element to indicate the player is in the queue
-   const queuedSceneUi = new SceneUI({
-       templateId: 'player-queued',
-
-       attachedToEntity: playerEntity,
-       offset: { x: 0, y: 1, z: 0 },
-   });
-   
-   queuedSceneUi.load(world);
  }
 
  // Queue Game (Countdown) Function *******************************************************************************************
@@ -726,6 +792,9 @@ startServer(world => {
           playerTopScore[playerEntity.id!] = playerScore[playerEntity.id!];
         }
 
+        // Despawn hazmat suit for each player
+        despawnHazmatSuit(world, playerEntity);
+
         // Move player back to lobby
 
         playerEntity.setPosition(GAME_CONFIG.POSITIONS.LOBBY);
@@ -788,6 +857,9 @@ startServer(world => {
 
     // Reset charging state
     playerChargingState[playerId] = false;
+
+    // Despawn hazmat suit
+    despawnHazmatSuit(world, playerEntity);
   }
 
  // Update Leaderboards Function ****************************************************************************************
@@ -845,16 +917,17 @@ startServer(world => {
  function spawnHeatCluster(world: World, position: { x: number, y: number, z: number }, clusterId: string) {
    const heatCluster = new Entity({
      name: 'Heat Cluster',
-     modelUri: 'models/projectiles/energy-orb-projectile.gltf',
+     modelUri: 'models/volcano-dash/energyCluster.gltf',
      modelLoopedAnimations: ['idle'],
      modelScale: 1.5,
+     opacity: 0.5,
      rigidBodyOptions: {
        type: RigidBodyType.KINEMATIC_POSITION,
        colliders: [
        {
          shape: ColliderShape.CYLINDER,
-         radius: 2,
-         halfHeight: 2,
+         radius: 1,
+         halfHeight: 1,
          isSensor: true,
            onCollision: (other: BlockType | Entity, started: boolean) => {
              if (other instanceof PlayerEntity) {
@@ -916,14 +989,14 @@ startServer(world => {
      name: 'Super Charge',
      modelUri: 'models/volcano-dash/superChargeStation.gltf',
      modelLoopedAnimations: ['idle'],
-     modelScale: 0.3,
+     modelScale: 1,
      rigidBodyOptions: {
        type: RigidBodyType.KINEMATIC_POSITION,
        colliders: [
          {
            shape: ColliderShape.CYLINDER,
-           radius: 2,
-           halfHeight: 2,
+           radius: 1,
+           halfHeight: 1,
            isSensor: true,
            onCollision: (other: BlockType | Entity, started: boolean) => {
              if (other instanceof PlayerEntity) {
@@ -953,9 +1026,14 @@ startServer(world => {
 
                  const originalHandler = playerEntity.controller!.onTickWithPlayerInput;
 
-                 playerEntity.controller!.onTickWithPlayerInput = (entity: PlayerEntity, input: Partial<Record<string | number | symbol, boolean>>) => {
+                 playerEntity.controller!.onTickWithPlayerInput = (
+                   entity: PlayerEntity, 
+                   input: Partial<Record<string | number | symbol, boolean>>,
+                   cameraOrientation: PlayerCameraOrientation,
+                   deltaTimeMs: number
+                 ) => {
                    if (originalHandler) {
-                     originalHandler(entity, input);
+                     originalHandler(entity, input, cameraOrientation, deltaTimeMs);
                    }
 
                    if (input.f && !isCharging && !playerSuperChargesUsed[playerId].has(chargeId) && !playerChargingState[playerId]) {
@@ -1158,7 +1236,7 @@ lobbyRoof.spawn(world, { x: 4, y: 17.5, z: 25 });
 
 // Lighting ****************************************************************************************
 
-world.setAmbientLightIntensity(0.5); // Reduce ambient light intensity
+world.setAmbientLightIntensity(0.8); // Reduce ambient light intensity
 world.setAmbientLightColor({ r: 218, g: 127, b: 80 }); // slightly purple
 
 // Create purple point lights
@@ -1187,6 +1265,9 @@ orangeLightPositions.forEach(position => {
   position: { x: 0, y: 40, z: 0 },
   trackedPosition: { x: 0, y: 0, z: 0 },
 })).spawn(world);
+
+
+
 
 });
 

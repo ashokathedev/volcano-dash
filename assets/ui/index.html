@@ -230,6 +230,9 @@
             </div>
           `).join('');
       }
+
+      // Add the new no-partner option
+      partnerList.innerHTML += '<div class="no-partner-option"><button class="solo-button" onclick="chooseSolo()">I\'ll Work Solo</button><span class="solo-description">Continue without a partner for this shift</span></div>';
     }
 
     if (data.type === 'partnerRequest') {
@@ -448,6 +451,36 @@
       submitButton.style.opacity = '0.5';
     }
   });
+
+  // Add this JavaScript function in the <script> section:
+
+  window.chooseSolo = function() {
+    const partnerUI = document.getElementById('partnerSelectionUI');
+    const confirmationEl = document.getElementById('partnershipConfirmation');
+    const confirmMessageEl = confirmationEl.querySelector('.confirmation-message');
+    
+    // Show confirmation message
+    confirmMessageEl.textContent = 'You chose to work solo for this shift!';
+    confirmationEl.style.display = 'block';
+    
+    // Hide confirmation after animation
+    setTimeout(() => {
+      confirmationEl.style.display = 'none';
+    }, 3000);
+    
+    // Hide selection UI with fade
+    partnerUI.classList.add('fade-out');
+    setTimeout(() => {
+      partnerUI.style.display = 'none';
+      partnerUI.classList.remove('fade-out');
+      hytopia.sendData({ type: 'lockPointer' });
+    }, 500);
+
+    // Notify the server of solo choice
+    hytopia.sendData({
+      type: 'chooseSolo'
+    });
+  };
 </script>
 
 <!-- ==================== HTML Section ==================== -->
@@ -1345,6 +1378,35 @@
     color: white;
     font-size: 24px;
     font-weight: bold;
+  }
+
+  .no-partner-option {
+    margin-top: 20px;
+    padding-top: 15px;
+    border-top: 1px solid rgba(255, 102, 0, 0.3);
+    text-align: center;
+  }
+
+  .solo-button {
+    background: rgba(255, 102, 0, 0.2);
+    color: #ff6600;
+    border: 2px solid #ff6600;
+    padding: 10px 20px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: all 0.2s ease;
+  }
+
+  .solo-button:hover {
+    background: rgba(255, 102, 0, 0.3);
+  }
+
+  .solo-description {
+    display: block;
+    color: #999;
+    font-size: 14px;
+    margin-top: 8px;
   }
 </style>
 
