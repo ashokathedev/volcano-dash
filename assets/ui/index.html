@@ -4,10 +4,51 @@
   let currentPlayerName = '';  // Track current player's name
   let currentPlayerId = null;  // Track current player's ID
   let playerNickname = '';     // Track player nickname
+  let currentChargingSound = null;
+
+  // Add this near the top with other utility functions
+  function playButtonClickSound() {
+    const clickSound = new Audio(`{{CDN_ASSETS_URL}}/sounds/sfx/ui/button-click.mp3`);
+    clickSound.volume = 0.2;
+    clickSound.play().catch(err => {
+      console.error('Error playing click sound:', err);
+    });
+  }
+
+  // Add this function near other utility functions
+  function playChargingSound() {
+    if (!currentChargingSound) {
+      currentChargingSound = new Audio(`{{CDN_ASSETS_URL}}/sounds/sfx/misc/volcano-dash/neopolitansixth-formant-riser.mp3`);
+      currentChargingSound.volume = 0.5; // Increased volume
+      
+      // Add load event handler
+      currentChargingSound.addEventListener('canplaythrough', () => {
+        currentChargingSound.play().catch(err => {
+          console.error('Error playing charging sound:', err);
+        });
+      });
+
+      // Add error handler
+      currentChargingSound.addEventListener('error', (e) => {
+        console.error('Error loading charging sound:', e);
+      });
+
+      // Force load
+      currentChargingSound.load();
+    }
+  }
+
+  function stopChargingSound() {
+    if (currentChargingSound) {
+      currentChargingSound.pause();
+      currentChargingSound.currentTime = 0;
+      currentChargingSound = null;
+    }
+  }
 
   // Partner request handler - Called when player clicks to request a partnership
   window.requestPartner = function(id, name) {
-    
+    playButtonClickSound();
     hytopia.sendData({
       type: 'requestPartner',
       targetId: id
@@ -139,12 +180,19 @@
           chargeBar.style.display = 'block';
           chargeFill.style.width = `${data.progress}%`;
           superChargePrompt.textContent = 'Hold F Until Complete!';
+          // Play charging sound when charging starts
+          if (data.progress === 0) {
+            console.log('Starting charge sound...'); // Debug log
+            playChargingSound();
+          }
           break;
           
         case 'reset':
           chargeBar.style.display = 'none';
           chargeFill.style.width = '0%';
           superChargePrompt.textContent = 'Oh No! You let go!';
+          console.log('Stopping charge sound (reset)...'); // Debug log
+          stopChargingSound();
           setTimeout(() => {
             superChargePrompt.textContent = 'Hold F to Super Charge your Energy';
           }, 1000);
@@ -153,6 +201,8 @@
         case 'complete':
           chargeBar.style.display = 'none';
           superChargePrompt.textContent = 'Super Charge Successful!';
+          console.log('Stopping charge sound (complete)...'); // Debug log
+          stopChargingSound();
           setTimeout(() => {
             superChargeUI.style.display = 'none';
           }, 2000);
@@ -160,6 +210,8 @@
           
         case 'exit':
           superChargeUI.style.display = 'none';
+          console.log('Stopping charge sound (exit)...'); // Debug log
+          stopChargingSound();
           break;
 
         case 'alreadyUsed':
@@ -230,8 +282,9 @@
       message.textContent = `${data.fromName} wants to be your partner!`;
       pendingRequest.style.display = 'block';
 
-      // Setup response buttons
+      // Setup response buttons with sound
       pendingRequest.querySelector('.accept-btn').onclick = () => {
+        playButtonClickSound();
         hytopia.sendData({
           type: 'respondToPartnerRequest',
           accepted: true
@@ -240,6 +293,7 @@
       };
 
       pendingRequest.querySelector('.reject-btn').onclick = () => {
+        playButtonClickSound();
         hytopia.sendData({
           type: 'respondToPartnerRequest',
           accepted: false
@@ -340,6 +394,24 @@
         }, 5000);
       }
     }
+
+    if (data.type === 'playTeleportSound') {
+      const audio = new Audio(`{{CDN_ASSETS_URL}}/sounds/sfx/misc/volcano-dash/zenithinfinitizestudios-fantasy-ui-button-4.mp3`);
+      audio.volume = 0.6;
+      audio.play();
+    }
+
+    if (data.type === 'playTeleportFailSound') {
+      const audio = new Audio(`{{CDN_ASSETS_URL}}/sounds/sfx/ui/notification-1.mp3`);
+      audio.volume = 0.2;
+      audio.play();
+    }
+
+    if (data.type === 'playTeleportSuccessSound') {
+      const audio = new Audio(`{{CDN_ASSETS_URL}}/sounds/sfx/misc/volcano-dash/lupine-elfenia-future-ui-acquired.mp3`);
+      audio.volume = 0.6;
+      audio.play();
+    }
   });
 
   // Utility Functions
@@ -412,6 +484,7 @@
 
   // Name submission handler - Processes initial player name entry and starts game
   window.submitName = function() {
+    playButtonClickSound();
     console.log('submitName function called');
     const nameInput = document.getElementById('nameInput');
     const welcomeScreen = document.getElementById('welcomeScreen');
@@ -486,6 +559,7 @@
 
   // Solo mode handler - Called when player chooses to play without a partner
   window.chooseSolo = function() {
+    playButtonClickSound();
     const partnerUI = document.getElementById('partnerSelectionUI');
     const confirmationEl = document.getElementById('partnershipConfirmation');
     const confirmMessageEl = confirmationEl.querySelector('.confirmation-message');
@@ -520,6 +594,7 @@
   };
 
   function closeAboutOverlay() {
+    playButtonClickSound();
     const overlay = document.getElementById('aboutOverlay');
     overlay.style.opacity = '0';
     overlay.style.transition = 'opacity 0.5s';
@@ -546,6 +621,7 @@
   });
 
   function closeTipsOverlay() {
+    playButtonClickSound();
     const overlay = document.getElementById('tipsOverlay');
     overlay.style.opacity = '0';
     overlay.style.transition = 'opacity 0.5s';
@@ -561,6 +637,7 @@
     const commands = document.querySelectorAll('.command');
     commands.forEach(command => {
       command.addEventListener('click', (e) => {
+        playButtonClickSound();
         const commandText = e.target.textContent;
         if (commandText === '!about') {
           const overlay = document.getElementById('aboutOverlay');
@@ -595,6 +672,7 @@
 
 <!-- Main Game Interface -->
 <div id="game-ui">
+  <div id="heatClusterNotification" class="heat-cluster-notification"></div>
   <!-- Stats Container -->
   <div class="stats-container">
     <!-- Remove this section

@@ -52,6 +52,7 @@ export function spawnHeatCluster(
                   type: 'multiplierActive',
                   multiplier: 10
                 });
+                
                 // Send heat cluster notification
                 other.player.ui.sendData({
                   type: 'heatClusterStatus',

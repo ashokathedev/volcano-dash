@@ -1,3 +1,10 @@
+// Volcano Dash
+
+// formant riser by neopolitansixth -- https://freesound.org/s/582459/ -- License: Attribution 4.0
+
+
+
+
 import {
   CollisionGroup,
   ColliderShape,
@@ -150,7 +157,6 @@ const LAVA_HEAT_INCREASE_RATE = 100;    // Heat increase rate (ms) when in Lava 
 const SCORE_RATE = 1;                  // Base rate at which score accumulates
 const SCORE_INTERVAL = 10;             // How often (ms) score updates
 
-// Near the top with other state variables
 const playerChargingState: Record<number, boolean> = {};  // Track if player is currently charging
 
 // Create a state object to pass to the power up functions
@@ -161,10 +167,21 @@ const powerUpState = {
   playerScore
 };
 
+
+let lavaAmbientSound: Audio | null = null;
+
 // Start the server *****************************************************************************************************************
 
 startServer(world => {
   
+ // Play the Outworld Theme
+   
+  new Audio({
+    uri: 'audio/music/outworld-theme.mp3', 
+    loop: true,
+    volume: 0.2,
+   }).play(world);
+
   //world.simulation.enableDebugRendering(true); // Enable debug rendering of the physics simulation.
 
   world.loadMap(worldMap); //load map
@@ -190,15 +207,6 @@ startServer(world => {
   GAME_CONFIG.SUPER_CHARGES.forEach(charge => {
     spawnSuperCharge(world, charge.position, charge.id, powerUpState);
   });
-
-
-  // AUDIO  ********************************************************************************************
-
-  new Audio({
-    uri: 'audio/music/outworld-theme.mp3', 
-    loop: true,
-    volume: 0.3,
-   }).play(world);
 
 
  // Player Join Functions **************************************************************************************
@@ -429,7 +437,7 @@ startServer(world => {
      modelScale: 0.6,
      rigidBodyOptions: {
        enabledPositions: { x: false, y: true, z: false },
-       enabledRotations: { x: true, y: true, z: true },
+       enabledRotations: { x: false, y: false, z: false },
      },
    });
  
@@ -557,6 +565,21 @@ startServer(world => {
    gameState = 'inProgress';
    gameStartTime = Date.now();
 
+   // Play game start chamber sound
+   new Audio({
+    uri: 'sounds/sfx/misc/volcano-dash/joseegn-ui-sound-return-1.mp3',
+    volume: 0.6,
+  }).play(world);
+
+   // Start lava ambient sound
+
+   lavaAmbientSound = new Audio({
+     uri: 'sounds/sfx/misc/volcano-dash/shelbyshark-spacerumble-loop.mp3',
+     loop: true,
+     volume: 0.5,
+   });
+   lavaAmbientSound.play(world);
+
    // Initialize active players
 
    GAME_PLAYER_ENTITIES.forEach(playerEntity => {
@@ -570,6 +593,12 @@ startServer(world => {
      playerTeleportCharges[playerId] = INITIAL_TELEPORT_CHARGES;
      playerScore[playerId] = 0;
      playerScoreMultipliers[playerId] = 1;
+
+     // Send teleport sound event to player's UI
+     playerEntity.player.ui.sendData({
+       type: 'playTeleportSound',
+       soundType: 'enter'
+     });
    });
 
   
@@ -625,6 +654,18 @@ startServer(world => {
   
    gameState = 'awaitingPlayers';
 
+   // Stop lava ambient sound using pause() instead of stop()
+   if (lavaAmbientSound) {
+     lavaAmbientSound.pause();
+     lavaAmbientSound = null;
+   }
+
+   // Play drain sound
+   new Audio({
+     uri: 'sounds/sfx/misc/volcano-dash/joseegn-ui-sound-return-1.mp3',
+     volume: 0.6,
+   }).play(world);
+
    resetPartnerships();
 
    // Send survival message to active players who didn't overheat
@@ -661,7 +702,11 @@ startServer(world => {
 
     setTimeout(() => {
       ACTIVE_PLAYERS.forEach(playerEntity => {
-      
+        playerEntity.player.ui.sendData({
+          type: 'playTeleportSound',
+          soundType: 'exit'
+        });
+        
         if (playerScore[playerEntity.id!] > (playerTopScore[playerEntity.id!] || 0)) {
           playerTopScore[playerEntity.id!] = playerScore[playerEntity.id!];
         }
@@ -707,6 +752,12 @@ startServer(world => {
     // Send overheat message
     playerEntity.player.ui.sendData({
       type: 'overheatMessage'
+    });
+
+    // Send teleport sound event to player's UI
+    playerEntity.player.ui.sendData({
+      type: 'playTeleportSound',
+      soundType: 'exit'
     });
 
     // Clear the heat interval if it exists
@@ -795,41 +846,57 @@ startServer(world => {
  function teleport(playerEntity: PlayerEntity) {
   const playerId = playerEntity.id!;
   
-  // Check if player has teleport charges remaining
+  // First check if player is in an active game
+  if (!ACTIVE_PLAYERS.has(playerEntity)) {
+    world.chatManager.sendPlayerMessage(playerEntity.player, 'Teleport charges can only be used inside the lava chamber!', 'FFFFFF');
+    return;
+  }
+  
   if (!playerTeleportCharges[playerId] || playerTeleportCharges[playerId] <= 0) {
-    world.chatManager.sendPlayerMessage(playerEntity.player, 'No Teleport Charges Left!', 'FFFFFF');  // White text
+    playerEntity.player.ui.sendData({
+      type: 'playTeleportFailSound'
+    });
+    world.chatManager.sendPlayerMessage(playerEntity.player, 'No Teleport Charges Left!', 'FFFFFF');
     return;
   }
 
-  // Get partner ID and verify partner is active
   const partnerId = getPartnerId(playerId);
   if (!partnerId) {
-    world.chatManager.sendPlayerMessage(playerEntity.player, 'No Partner Found!', 'FFFFFF');  // White text
+    playerEntity.player.ui.sendData({
+      type: 'playTeleportFailSound'
+    });
+    world.chatManager.sendPlayerMessage(playerEntity.player, 'No Partner Found!', 'FFFFFF');
     return;
   }
 
-  // Find partner entity and verify they are still active
-  
   const partnerEntity = Array.from(ACTIVE_PLAYERS)
     .find(entity => entity.id === partnerId);
 
   if (!partnerEntity || !ACTIVE_PLAYERS.has(partnerEntity)) {
-    world.chatManager.sendPlayerMessage(playerEntity.player, 'No Partner Found!', 'FFFFFF');  // White text
+    playerEntity.player.ui.sendData({
+      type: 'playTeleportFailSound'
+    });
+    world.chatManager.sendPlayerMessage(playerEntity.player, 'No Partner Found!', 'FFFFFF');
     return;
   }
 
   // Teleport to partner's location
   playerEntity.setPosition(partnerEntity.position);
   
+  // Play successful teleport sound
+  playerEntity.player.ui.sendData({
+    type: 'playTeleportSuccessSound'
+  });
+  
   // Deduct teleport charge
   playerTeleportCharges[playerId]--;
 
   // Send success messages to both players
   world.chatManager.sendPlayerMessage(playerEntity.player, 
-    `Teleported to ${playerNickname[partnerId]}!`, '00FF00');  // Green text
+    `Teleported to ${playerNickname[partnerId]}!`, '00FF00');
   
   world.chatManager.sendPlayerMessage(partnerEntity.player, 
-    `${playerNickname[playerId]} teleported to you!`, '00FF00');  // Green text
+    `${playerNickname[playerId]} teleported to you!`, '00FF00');
 
   // Notify player of successful teleport and remaining charges
   playerEntity.player.ui.sendData({
@@ -873,6 +940,67 @@ startServer(world => {
      type: 'showTipsOverlay'
    });
  });
+
+ // Mind Flayer NPC Movement **********************************************
+ 
+ let targetWaypointIndex = 0;
+
+ const WAYPOINT_COORDINATES = [
+   { x: 23, y: 1, z: 30 },
+   { x: -16, y: 1, z: 32 },
+   { x: -25, y: 1, z: 17 },
+   { x: 13, y: 1, z: 2 },
+   {x: 27, y: 1, z: 8 },
+   {x: 36, y: 1, z: 18 },
+
+ ];
+ 
+ const mindFlayer = new Entity({
+   controller: new SimpleEntityController(),
+   modelUri: 'models/npcs/mindflayer.gltf',
+   modelScale: 0.6,
+   modelLoopedAnimations: [ 'walk' ],
+   modelAnimationsPlaybackRate: 1.5, // roughly match the animation speed to the move speed we'll use
+   rigidBodyOptions: {
+
+     enabledRotations: { x: false, y: true, z: false }, // prevent flipping over when moving
+   },
+ });
+ 
+ // We want to face towards the target each tick, since our relative position
+ // to the target may change as we move from a previous waypoint to the next.
+ mindFlayer.onTick = () => {
+   // Remove the early return since we want to keep rotating even after last waypoint
+   const controller = mindFlayer.controller as SimpleEntityController;
+   // Use modulo to wrap around to first waypoint
+   const currentWaypoint = WAYPOINT_COORDINATES[targetWaypointIndex % WAYPOINT_COORDINATES.length];
+   controller.face(currentWaypoint, 5);
+ };
+ 
+ mindFlayer.spawn(world, { x: 32, y: 4, z: 11 });
+ 
+ // Pathfind to the next waypoint as we reach each waypoint
+ const pathfind = () => {
+   if (targetWaypointIndex >= WAYPOINT_COORDINATES.length) {
+     // Reset the index to 0 instead of stopping
+     targetWaypointIndex = 0;
+   }
+       
+   const controller = mindFlayer.controller as SimpleEntityController;
+   const targetWaypoint = WAYPOINT_COORDINATES[targetWaypointIndex];
+     
+   controller.move(targetWaypoint, 1, {
+     moveCompleteCallback: () => {
+       // Increment waypoint index and continue pathfinding
+       targetWaypointIndex++; 
+       pathfind();
+     },
+     moveIgnoreAxes: { x: false, y: true, z: false },
+   });
+ };
+ 
+ pathfind();
+
 
 });
 
