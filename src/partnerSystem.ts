@@ -1,5 +1,5 @@
 import { World, PlayerEntity } from 'hytopia';
-import { playerNickname } from './index';
+import { playerNickname } from './state';
 
 // Partner System State
 // Maps player IDs to their partner's ID (bidirectional pairing)

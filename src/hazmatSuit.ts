@@ -158,6 +158,8 @@ export function spawnHazmatSuit(world: World, playerEntity: PlayerEntity) {
   );
 }
 
+// Despawn Hazmat Suit Function *********************************************************************************
+
 export function despawnHazmatSuit(world: World, playerEntity: PlayerEntity) {
   // Get all child entities of the player that are part of the hazmat suit
   const hazmatPieces = world.entityManager.getAllEntities().filter(entity => {

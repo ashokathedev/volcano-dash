@@ -1,13 +1,13 @@
 <!-- ==================== JavaScript Section ==================== -->
+<!-- Core game state variables -->
 <script>
-  // Add at the top of the script section
   let currentPlayerName = '';  // Track current player's name
   let currentPlayerId = null;  // Track current player's ID
-  let playerNickname = '';
+  let playerNickname = '';     // Track player nickname
 
-  // Make requestPartner globally available but use hytopia through the proper channel
+  // Partner request handler - Called when player clicks to request a partnership
   window.requestPartner = function(id, name) {
-    // Use the global hytopia object's sendData method
+    
     hytopia.sendData({
       type: 'requestPartner',
       targetId: id
@@ -20,10 +20,8 @@
     }
   };
 
-  // Single onData handler for all game events
-
+  // Main event handler - Processes all incoming game events
   hytopia.onData((data) => {
-
     // Handle initial state
     if (data.type === 'initialState') {
       currentPlayerName = data.playerName;
@@ -40,9 +38,7 @@
       // Hide partner selection UI
       const partnerSelectionUI = document.getElementById('partnerSelectionUI');
       if (partnerSelectionUI) {
-
         // Add fade-out class
-
         partnerSelectionUI.classList.add('fade-out');
         
         // Remove from DOM after fade completes
@@ -65,11 +61,9 @@
     if (data.type === 'nameSet') {
       currentPlayerName = data.name;
       currentPlayerId = data.playerId;    
-
     }
 
     // Handle player state updates
-
     if (data.type === 'updatePlayerState') {
       var heatBar = document.getElementById('heatBar');
       var heatPercent = (data.heatLevel / 1000) * 100;
@@ -99,7 +93,6 @@
     }
 
     // Handle countdown updates
-
     if (data.type === 'countdownUpdate') {
       var messageEl = document.getElementById('countdownMessage');
       if (!messageEl) return;
@@ -128,7 +121,6 @@
     }
 
     // Handle supercharge states
-
     if (data.type === 'superChargeState') {
       const superChargeUI = document.getElementById('superChargeUI');
       const chargeBar = document.getElementById('chargeBar');
@@ -182,7 +174,6 @@
     }
 
     // Handle leaderboard updates
-
     if (data.type === 'updateLeaderboards') {
       updateLeaderboards(data.lastShiftLeaders, data.allTimeLeaders);
     }
@@ -230,9 +221,6 @@
             </div>
           `).join('');
       }
-
-      // Add the new no-partner option
-      partnerList.innerHTML += '<div class="no-partner-option"><button class="solo-button" onclick="chooseSolo()">I\'ll Work Solo</button><span class="solo-description">Continue without a partner for this shift</span></div>';
     }
 
     if (data.type === 'partnerRequest') {
@@ -276,7 +264,7 @@
       const confirmMessageEl = confirmationEl.querySelector('.confirmation-message');
       
       // Show confirmation message
-      confirmMessageEl.textContent = `Partnership formed with ${data.player2}!`;
+      confirmMessageEl.textContent = `Partnership formed!`;
       confirmationEl.style.display = 'block';
       
       // Hide confirmation after animation
@@ -315,16 +303,51 @@
         messageUI.style.display = 'none';
       }, 2000);
     }
+
+    if (data.type === 'showAboutOverlay') {
+      const overlay = document.getElementById('aboutOverlay');
+      overlay.style.display = 'flex';
+    }
+
+    if (data.type === 'showTipsOverlay') {
+      const overlay = document.getElementById('tipsOverlay');
+      overlay.style.display = 'flex';
+    }
+
+    if (data.type === 'heatWarning') {
+      const heatWarning = document.getElementById('heatWarning');
+      if (heatWarning) {
+        heatWarning.style.display = data.show ? 'block' : 'none';
+      }
+    }
+
+    if (data.type === 'overheatMessage') {
+      const message = document.getElementById('overheatMessage');
+      if (message) {
+        message.style.display = 'block';
+        setTimeout(() => {
+          message.style.display = 'none';
+        }, 5000);
+      }
+    }
+
+    if (data.type === 'survivalMessage') {
+      const message = document.getElementById('survivalMessage');
+      if (message) {
+        message.style.display = 'block';
+        setTimeout(() => {
+          message.style.display = 'none';
+        }, 5000);
+      }
+    }
   });
 
-  // Helper functions
-
+  // Utility Functions
   function formatScore(score) {
     return score.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   }
 
-  // Template registrations
-
+  // Register UI Templates for NPCs and Queue Status
   hytopia.registerSceneUITemplate('join-npc-message', () => {
     return document.getElementById('join-npc-message').content.cloneNode(true);
   });
@@ -337,9 +360,8 @@
     return document.getElementById('player-queued').content.cloneNode(true);
   });
 
-  // Add a helper function to update leaderboards
+  // Updates both last shift and all-time leaderboards with new data
   function updateLeaderboards(lastShiftLeaders, allTimeLeaders) {
-    
     const lastShiftList = document.getElementById('lastShiftLeaders');
     const allTimeList = document.getElementById('allTimeLeaders');
     
@@ -368,7 +390,7 @@
     }
   }
 
-  // Add debug logging
+  // Debug logging wrappers for hytopia methods
   const originalSendData = hytopia.sendData;
   hytopia.sendData = function(data) {
     originalSendData.call(this, data);
@@ -388,7 +410,7 @@
     });
   }
 
-  // Update the submitName function to lock pointer after submission
+  // Name submission handler - Processes initial player name entry and starts game
   window.submitName = function() {
     console.log('submitName function called');
     const nameInput = document.getElementById('nameInput');
@@ -418,7 +440,7 @@
     }
   };
 
-  // Add this near the top of the script section with other window assignments
+  // Handle Enter key press in name input field
   window.handleEnterKey = function(e) {
     if (e.key === 'Enter') {
       e.preventDefault(); // Prevent default Enter behavior
@@ -430,13 +452,23 @@
     const nameInput = document.getElementById('nameInput');
     const submitButton = document.getElementById('submitName');
     const welcomeScreen = document.getElementById('welcomeScreen');
+    const welcomeContent = document.querySelector('.welcome-content');
 
     // Focus the input when the page loads
     nameInput?.focus();
 
-    // Click anywhere to focus input
-    welcomeScreen?.addEventListener('click', () => {
+    // Only focus input when clicking within the welcome content
+    welcomeContent?.addEventListener('click', () => {
       nameInput?.focus();
+    });
+
+    // Prevent any clicks outside the welcome content from reaching the game
+    welcomeScreen?.addEventListener('click', (event) => {
+      event.stopPropagation();
+      // Don't focus input when clicking outside the welcome content
+      if (event.target === welcomeScreen) {
+        event.preventDefault();
+      }
     });
 
     // Update button style based on input
@@ -452,15 +484,14 @@
     }
   });
 
-  // Add this JavaScript function in the <script> section:
-
+  // Solo mode handler - Called when player chooses to play without a partner
   window.chooseSolo = function() {
     const partnerUI = document.getElementById('partnerSelectionUI');
     const confirmationEl = document.getElementById('partnershipConfirmation');
     const confirmMessageEl = confirmationEl.querySelector('.confirmation-message');
     
     // Show confirmation message
-    confirmMessageEl.textContent = 'You chose to work solo for this shift!';
+    confirmMessageEl.textContent = 'NO PARTNER SELECTED';  // Updated text in all caps to match style
     confirmationEl.style.display = 'block';
     
     // Hide confirmation after animation
@@ -481,23 +512,88 @@
       type: 'chooseSolo'
     });
   };
+
+  // Add this function to handle keydown events in the welcome screen
+  window.handleWelcomeKeydown = function(event) {
+    // Stop event propagation to prevent game from receiving keyboard input
+    event.stopPropagation();
+  };
+
+  function closeAboutOverlay() {
+    const overlay = document.getElementById('aboutOverlay');
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.5s';
+    
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      overlay.style.opacity = '1';
+    }, 500);
+  }
+
+  // Add keyboard handler for Enter key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const aboutOverlay = document.getElementById('aboutOverlay');
+      const tipsOverlay = document.getElementById('tipsOverlay');
+      
+      if (aboutOverlay.style.display === 'flex') {
+        closeAboutOverlay();
+      }
+      if (tipsOverlay.style.display === 'flex') {
+        closeTipsOverlay();
+      }
+    }
+  });
+
+  function closeTipsOverlay() {
+    const overlay = document.getElementById('tipsOverlay');
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.5s';
+    
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      overlay.style.opacity = '1';
+    }, 500);
+  }
+
+  // Add click handlers for the chat commands
+  document.addEventListener('DOMContentLoaded', () => {
+    const commands = document.querySelectorAll('.command');
+    commands.forEach(command => {
+      command.addEventListener('click', (e) => {
+        const commandText = e.target.textContent;
+        if (commandText === '!about') {
+          const overlay = document.getElementById('aboutOverlay');
+          overlay.style.display = 'flex';
+        } else if (commandText === '!tips') {
+          const overlay = document.getElementById('tipsOverlay');
+          overlay.style.display = 'flex';
+        }
+      });
+    });
+  });
 </script>
 
-<!-- ==================== HTML Section ==================== -->
+<!-- ==================== Main Game UI Structure ==================== -->
 
+<!-- Welcome Screen -->
 <div id="welcomeScreen" class="welcome-screen">
-  <div class="welcome-content">
-    <h1>Welcome to Volcano Dash!</h1>
-    <p>Work shifts absorbing energy from the lava chamber. Be careful not to overheat!</p>
+  <!-- Add onkeydown handler to prevent key events from reaching the game -->
+  <div class="welcome-content" onkeydown="handleWelcomeKeydown(event)">
+    <div class="splash-image">
+      <img src="{{CDN_ASSETS_URL}}/ui/images/volcanoDashSplash.jpg" alt="Volcano Dash">
+    </div>
+    <h1>VOLCANO DASH</h1>
+    <p>Work shifts absorbing energy from the lava chamber. <br> <span style="color: #ff3333;">Be careful not to overheat!</span></p>
     <div class="name-input-container">
       <input type="text" id="nameInput" class="name-input" placeholder="Enter Name" maxlength="20" onKeyPress="handleEnterKey(event)">
       <button id="submitName" class="submit-button" onClick="submitName()">Press Enter to Start</button>
     </div>
+    <br> <p><span class="esc-note">(press esc to unlock mouse)</span></p>
   </div>
 </div>
 
-<!-- Game UI -->
-
+<!-- Main Game Interface -->
 <div id="game-ui">
   <!-- Stats Container -->
   <div class="stats-container">
@@ -528,7 +624,7 @@
   <!-- Bottom UI container -->
   <div class="bottom-ui-container">
     <div class="score-box">
-      <div class="score-label">Energy Absorbed</div>
+      <div class="score-label">Energy Harvested</div>
       <div class="score-value" id="currentScore">0</div>
     </div>
 
@@ -539,25 +635,28 @@
       </div>
     </div>
 
+    <div id="heatWarning" class="heat-warning" style="display: none;">
+      Heat Level: DANGEROUS
+    </div>
+
     <div class="teleport-box">
       <div class="teleport-info">
-        <div class="teleport-label">Teleport Charges [Q]</div>
+        <div class="teleport-label">Teleport [Q]</div>
         <div class="teleport-value" id="teleportCharges">0</div>
       </div>
     </div>
   </div>
 
-  <!-- Move countdown message outside the center container -->
-  <div id="countdownMessage" class="countdown-message"></div>
-
-  <!-- Keep the center container for partner-related UI -->
+  <div id="countdownMessage" class="countdown-message"></div> 
   <div id="centerContainer" class="center-container">
+
     <!-- Partner Selection -->
     <div id="partnerSelectionUI" class="center-panel partner-selection" style="display: none;">
       <div class="partner-selection-content">
-        <h2>Choose Your Partner</h2>
-        <p>Select someone to team up with for this shift. Partners can teleport to each other during the game.</p>
-        <div id="partnerList" class="partner-list"></div>
+        <h2>Shift Starting Soon!</h2>
+        <h3>Select a partner for this shift. Partners can teleport to each other using Q during the game.</h3>
+        
+        <!-- Move status and request elements here, before the partner list -->
         <div id="selectionStatus" class="selection-status"></div>
         <div id="pendingRequest" class="pending-request" style="display: none;">
           <div class="request-message"></div>
@@ -565,6 +664,13 @@
             <button class="accept-btn">Accept</button>
             <button class="reject-btn">Decline</button>
           </div>
+        </div>
+        
+        <div id="partnerList" class="partner-list"></div>
+        
+        <!-- Add solo button at the bottom -->
+        <div class="no-partner-option">
+          <button class="solo-button" onclick="chooseSolo()">I'll Work Solo</button>
         </div>
       </div>
     </div>
@@ -584,12 +690,16 @@
     <div class="teleport-charges"></div>
   </div>
 
-  <!-- Move this element outside any containers that might be hidden -->
   <div id="countdown" class="countdown"></div>
+
+  <!-- Chat Commands -->
+  <div class="chat-commands">
+    <div class="command">!about</div>
+    <div class="command">!tips</div>
+  </div>
 </div>
 
-<!-- Super Charge UI -->
-
+<!-- Gameplay Overlay Elements -->
 <div id="superChargeUI">
   <div id="superChargePrompt">Press F to Super Charge your Energy</div>
   <div id="chargeBar">
@@ -602,8 +712,7 @@
   <div id="teleportMessagePrompt"></div>
 </div>
 
-<!-- Templates -->
-
+<!-- Message Templates -->
 <template id="join-npc-message">
   <div class="join-npc-message">
     <h1>Join the Next Shift!</h1>
@@ -626,11 +735,54 @@
   </div>
 </template>
 
-<!-- Heat Cluster Notification -->
-<div id="heatClusterNotification" class="heat-cluster-notification"></div>
+<!-- Game State Overlays -->
+<div id="aboutOverlay" class="overlay" style="display: none;">
+  <div class="overlay-content">
+    <div class="about-text">VOLTECH INDUSTRIES
 
-<!-- ==================== CSS Section ==================== -->
+Voltech is a cutting-edge resource company specalizing in volatile geothermal energy extration.
+
+As a Voltech operator, you will be transported into a high-risk volcanic chamber to siphon raw geothermal energy using a specialized suit.
+
+<strong>The longer you last in the chamber - the more energy you harvest for the company.</strong> We highly recommend working with a partner to maximize your harvest each shift.
+
+Your equpment is designed to handle high levels of heat, but it can only take so much. <strong>If your heat level rises too high, you will be automatically transported out of the chamber.</strong></div>
+    <button id="closeAbout" class="submit-button" onClick="closeAboutOverlay()">Press Enter to Close</button>
+  </div>
+</div>
+
+<!-- Add new Tips Overlay -->
+<div id="tipsOverlay" class="overlay" style="display: none;">
+  <div class="overlay-content">
+    <div class="tips-text">Maximize your Harvest
+
+<strong class="section-header">Work with a Partner</strong>
+Your suit is equipped with two teleport charges that allow you to transport to your partner's location. Use these to get out of danger or strategically navigate to high value locations. <strong>Use Q to teleport.</strong>
+
+<strong class="section-header">Energy Clusters</strong>
+Stand inside of an energy cluster to harvest energy at a faster rate. Stay in these locations as long as possible.
+
+<strong class="section-header">Supercharge Stations</strong>
+Use F at a supercharge station to 2x your harvested energy. Each station can only be used once.
+
+</div>
+    <button id="closeTips" class="submit-button" onClick="closeTipsOverlay()">Press Enter to Close</button>
+  </div>
+</div>
+
+<!-- Add these new message overlays before the closing body tag -->
+<div id="overheatMessage" class="center-message" style="display: none;">
+  Your Suit Overheated! Extraction Successful
+</div>
+
+<div id="survivalMessage" class="center-message" style="display: none;">
+  Congratulations! You survived the Shift!
+</div>
+
+<!-- ==================== Styling ==================== -->
+ 
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Inter:wght@400;600&display=swap');
 
   /* Welcome Screen Styles */
 
@@ -646,24 +798,31 @@
     align-items: center;
     z-index: 2000;
     transition: opacity 0.5s;
+    pointer-events: all;  /* Ensure welcome screen captures all mouse events */
   }
 
   .welcome-content {
     background: rgba(0, 0, 0, 0.7);
-    padding: 40px;
+    padding: 40px 40px 40px 40px;  
     border-radius: 15px;
     text-align: center;
     color: #fff;
     border: 2px solid #ff6600;
     max-width: 500px;
-    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
   }
 
   .welcome-content h1 {
     color: #ff6600;
-    margin-bottom: 20px;
-    font-size: 32px;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    text-align: center;
+    margin: 0 0 20px 0;
+    font-size: 2.5em;
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 2px;
+    font-weight: 700;
   }
 
   .welcome-content p {
@@ -671,6 +830,14 @@
     line-height: 1.6;
     font-size: 18px;
     color: #eee;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 400;
+  }
+
+  .esc-note {
+    font-style: italic;
+    font-size: 14px;
+    color: #999;
   }
 
   .name-input-container {
@@ -689,18 +856,20 @@
     width: 250px;
     text-align: center;
     font-size: 18px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .submit-button {
-    margin-top: 15px;  /* Add space above the button */
+    padding: 10px 30px;
+    border-radius: 8px;
+    border: none;
     background: #ff6600;
     color: white;
-    border: none;
-    padding: 12px 30px;
-    border-radius: 8px;
     font-size: 18px;
     cursor: pointer;
-    transition: background-color 0.2s;
+    transition: all 0.2s;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 600;
   }
 
   .submit-button:hover {
@@ -718,9 +887,10 @@
     position: fixed;
     top: 20px;
     right: 20px;
-    display: flex;  /* Always visible */
+    display: flex;
     flex-direction: column;
     gap: 20px;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .best-shift-box {
@@ -756,20 +926,23 @@
     padding: 15px 25px;
     border-radius: 12px;
     text-align: center;
-    min-width: 250px;
+    min-width: 200px;
   }
 
   .score-label {
     color: #ff6600;
-    font-size: 18px;
+    font-size: 16px;
     text-transform: uppercase;
     margin-bottom: 8px;
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 1px;
   }
 
   .score-value {
     color: white;
     font-size: 28px;
     font-weight: bold;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .leaderboard-box {
@@ -785,6 +958,8 @@
     text-transform: uppercase;
     margin-bottom: 10px;
     text-align: center;
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 1px;
   }
 
   .leaderboard-list {
@@ -808,7 +983,7 @@
 
   .heat-container {
     position: static;
-    width: 350px;
+    width: 200px;
     text-align: center;
     background: rgba(0, 0, 0, 0.7);
     padding: 15px 25px;
@@ -817,9 +992,11 @@
 
   .heat-label {
     color: #ff6600;
-    font-size: 18px;
+    font-size: 16px;
     text-transform: uppercase;
     margin-bottom: 8px;
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 1px;
   }
 
   .heat-bar-wrapper {
@@ -897,7 +1074,6 @@
     font-size: 24px;
     color: #ff6600;
     margin: 0 0 8px 0;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
   }
 
   .join-npc-message p {
@@ -1265,14 +1441,17 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.8);
-    padding: 20px 30px;
+    background: rgba(0, 0, 0, 0.9);
+    padding: 25px 40px;
     border-radius: 12px;
-    color: #44ff44;
-    border: 2px solid #44ff44;
     text-align: center;
     z-index: 1002;
     animation: fadeInOut 3s forwards;
+    /* Match other messages */
+    border: 2px solid #ff6600;
+    color: #ff6600;
+    font-size: 24px;
+    font-family: 'Orbitron', sans-serif;
   }
 
   @keyframes fadeInOut {
@@ -1357,7 +1536,7 @@
     justify-content: center;
     align-items: center;
     height: 60px;
-    min-width: 200px;  /* Reduce from 250px to 200px */
+    min-width: 160px;
   }
 
   .teleport-info {
@@ -1372,12 +1551,15 @@
     color: #ff6600;
     font-size: 16px;
     text-transform: uppercase;
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 1px;
   }
 
   .teleport-value {
     color: white;
     font-size: 24px;
     font-weight: bold;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 
   .no-partner-option {
@@ -1388,18 +1570,20 @@
   }
 
   .solo-button {
-    background: rgba(255, 102, 0, 0.2);
-    color: #ff6600;
+    background: rgba(0, 0, 0, 0.7);
+    color: #ffffff;
     border: 2px solid #ff6600;
-    padding: 10px 20px;
-    border-radius: 5px;
-    cursor: pointer;
+    padding: 12px 25px;
+    border-radius: 8px;
     font-size: 16px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
     transition: all 0.2s ease;
+    margin-top: 20px;
   }
 
   .solo-button:hover {
-    background: rgba(255, 102, 0, 0.3);
+    background: rgba(255, 102, 0, 0.2);
   }
 
   .solo-description {
@@ -1408,9 +1592,233 @@
     font-size: 14px;
     margin-top: 8px;
   }
+
+  .splash-image {
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto 30px;  /* Increased bottom margin for more space */
+  }
+
+  .splash-image img {
+    width: 100%;
+    height: auto;
+    border-radius: 10px;
+  }
+
+  /* Add this to prevent mouse events from reaching the game UI while welcome screen is visible */
+  
+  #game-ui {
+    pointer-events: none;
+  }
+
+  /* Re-enable pointer events after welcome screen is hidden */
+
+  #welcomeScreen[style*="display: none"] + #game-ui {
+    pointer-events: auto;
+  }
+
+  .overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    transition: opacity 0.5s;
+  }
+
+  .overlay-content {
+    background: rgba(0, 0, 0, 0.7);
+    padding: 40px;
+    border-radius: 15px;
+    text-align: center;
+    color: #fff;
+    border: 2px solid #ff6600;
+    max-width: 500px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .about-text {
+    white-space: pre-line;
+    line-height: 1.6;
+    margin-bottom: 30px;
+    font-size: 18px;
+    color: #eee;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 400;
+  }
+
+  .about-text::first-line {
+    color: #ff6600;
+    font-size: 24px;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+
+  .about-text strong {
+    color: #ff8533;
+  }
+
+  .tips-text {
+    white-space: pre-line;
+    line-height: 1.6;
+    margin-bottom: 30px;
+    font-size: 18px;
+    color: #eee;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 400;
+  }
+
+  .tips-text::first-line {
+    color: #ff6600;
+    font-size: 24px;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+
+  .tips-text strong {
+    color: #ff8533;
+  }
+
+  .tips-text strong.section-header {
+    display: block;
+    margin-top: 20px;
+    margin-bottom: 5px;
+  }
+
+  .chat-commands {
+    position: fixed;
+    left: 20px;
+    top: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    padding: 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 102, 0, 0.3);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    z-index: 1000;
+  }
+
+  .command {
+    color: #ff6600;
+    font-size: 14px;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: color 0.2s ease;
+    text-align: left;
+  }
+
+  .command:hover {
+    color: #ff8533;
+  }
+
+  .heat-warning {
+    position: fixed;  /* Change from absolute to fixed */
+    bottom: 140px;   /* Position it above the heat bar */
+    left: 50%;
+    transform: translateX(-50%);
+    width: auto;
+    text-align: center;
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+    animation: pulse 1s infinite;
+    font-family: 'Orbitron', sans-serif;
+    pointer-events: none;
+    white-space: nowrap;
+    z-index: 1001;  /* Ensure it appears above other UI elements */
+  }
+
+  @keyframes pulse {
+    0% { opacity: 0.5; }
+    50% { opacity: 1; }
+    100% { opacity: 0.5; }
+  }
+
+  .center-message {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: #ff6600;
+    padding: 25px 40px;
+    border-radius: 12px;
+    border: 2px solid #ff6600;
+    font-size: 24px;
+    text-align: center;
+    z-index: 1000;
+    font-family: 'Orbitron', sans-serif;
+    animation: fadeIn 0.5s ease-in;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  .partner-selection-content h2 {
+    color: #ff6600;
+    text-align: center;
+    margin: 0 0 20px 0;
+    font-size: 2.5em;
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 2px;
+    font-weight: 700;
+  }
+
+  .partner-selection-content h3 {
+    margin-bottom: 30px;
+    line-height: 1.6;
+    font-size: 18px;
+    color: #eee;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 400;
+  }
+
+  .partner-selection {
+    background: rgba(0, 0, 0, 0.9);
+    padding: 40px;
+    border-radius: 15px;
+    border: 2px solid #ff6600;
+    max-width: 500px;
+  }
+
+  /* Update the solo button to match other buttons */
+  .solo-button {
+    background: rgba(0, 0, 0, 0.7);
+    color: #ffffff;
+    border: 2px solid #ff6600;
+    padding: 12px 25px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-family: 'Inter', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 20px;
+  }
+
+  .solo-button:hover {
+    background: rgba(255, 102, 0, 0.2);
+  }
+
+  .confirmation-message {
+    color: #ff6600;
+    font-size: 24px;
+    font-family: 'Orbitron', sans-serif;
+    letter-spacing: 1px;
+  }
 </style>
 
-<!-- Add this right after the opening <body> tag or at the start of your HTML section -->
 
   
   

@@ -24,6 +24,7 @@ import {
 } from 'hytopia';
 
 import worldMap from './assets/maps/terrain.json';
+
 import { 
     handlePartnerRequest, 
     initializePartnerSelection, 
@@ -33,10 +34,15 @@ import {
     getPartnerId,
     cleanupPlayerPartnerships,
     removePartnership,
-} from './partnerSystem';
-import { buildChamberCourse, LAVA_START_X, LAVA_START_Z } from './chamberCourse';
-import { buildPracticeCourse, PRACTICE_START_X, PRACTICE_START_Z } from './practiceCourse';
-import { spawnHazmatSuit, despawnHazmatSuit } from './hazmatSuit';
+} from './src/partnerSystem';
+
+import { buildChamberCourse, LAVA_START_X, LAVA_START_Z } from './src/chamberCourse';
+import { buildPracticeCourse, PRACTICE_START_X, PRACTICE_START_Z } from './src/practiceCourse';
+import { spawnHazmatSuit, despawnHazmatSuit } from './src/hazmatSuit';
+import { initiateRisingLava, drainLava } from './src/risingLava';
+import { spawnHeatCluster, spawnSuperCharge } from './src/powerUps';
+import { playerNickname } from './src/state';
+import { buildChamberWalls } from './src/chamberWalls';
 
 
 // Game Config *****************************************************************************************
@@ -44,14 +50,9 @@ import { spawnHazmatSuit, despawnHazmatSuit } from './hazmatSuit';
 const GAME_CONFIG = {
 
   START_DELAY: 15, // Countdown before shift begins - players can select their partner
- 
-  // Spawn Points for players and NPCS
 
   POSITIONS: { 
-    ARENA: { x: 14, y: 5, z: -12},      // Arena Spawn Point
-    JOIN_NPC: { x: 3, y: 5, z: 13 },  // Shift Manager Spawn Point (***** UPDATE NAME TO SHIFT MANAGER! ***)
-    LOBBY: { x: 0, y: 4, z: 0 },       // Lobby Repawn Point after shift ends
-    GAME_JOIN: { x: 3, y: 4, z: 28 }, // Initial spawn point for players joining the server { x: 3, y: 4, z: 28 }
+    JOIN_NPC: { x: 3, y: 5, z: 13 },    // Join NPC Spawn Point
   },
 
   // Spawn points and IDs for super charges
@@ -67,13 +68,8 @@ const GAME_CONFIG = {
     { id: 'charge8', position: { x: 15, y: 25, z: -5 } },     // Level D 
     { id: 'charge9', position: { x: 15, y: 37, z: -7 } },     // Level D 
     { id: 'charge10', position: { x: 15, y: 37, z: -19 } },     // Level D 
-  
-
-   
 
   ],
-
-
 
   // Spawn points and IDs for heat clusters
 
@@ -89,10 +85,25 @@ const GAME_CONFIG = {
   ]
 };
 
+
+// Random Spawn Locations
+
+function getRandomGameJoinSpawn() {
+  const randomX = Math.random() * 14 - 1;  // Range from -1 to 13
+  const randomZ = Math.random() * 8 + 20;  // Range from 20 to 28
+  return { x: randomX, y: 4, z: randomZ };
+}
+ 
+   
+function getRandomArenaSpawn() {
+  const randomX = Math.random() * 4 + 14;  // Range from 12 to 16
+  const randomZ = Math.random() * 4 - 14;  // Range from -14 to -10
+  return { x: randomX, y: 5, z: randomZ };
+}
+ 
 // Game State Management ---------------------------------------------------------------
 
-let gameState: 'awaitingPlayers' | 'starting' | 
-   'inProgress' = 'awaitingPlayers';                     // Current phase (waiting/countdown/playing)
+let gameState: 'awaitingPlayers' | 'starting' | 'inProgress' = 'awaitingPlayers'; 
 let gameCountdownStartTime: number | null = null;        // When the pre-game countdown started
 let gameStartTime: number | null = null;                 // When the actual gameplay began
 let gameUiState: object = {};                           // Shared UI state data for all players (*****IS THIS BEING USED??****)
@@ -139,25 +150,18 @@ const LAVA_HEAT_INCREASE_RATE = 100;    // Heat increase rate (ms) when in Lava 
 const SCORE_RATE = 1;                  // Base rate at which score accumulates
 const SCORE_INTERVAL = 10;             // How often (ms) score updates
 
-// Lava Arena Configuration
-const LAVA_RISE_VELOCITY = 0.5;        // How fast lava rises
-const LAVA_RISE_DELAY = 1;             // Time before lava starts rising (secs)
-const LAVA_Y = -17;                    // Y center point coordinate for rising lava
-const LAVA_MAX_HEIGHT = 17;             // Maximum height lava center point can rise to
-
-// Lava Dimensions
-const LAVA_HALF_EXTENT_X = 11;         // Half width of lava area (x units from center point)
-const LAVA_HALF_EXTENT_Y = 17;         // Half height of lava area (y units from center point)
-const LAVA_HALF_EXTENT_Z = 11;         // Half depth of lava area (z units from center point)
-
 // Near the top with other state variables
-export const playerNickname: Record<number, string> = {};  // Track nicknames by player ID
-
-// Add this near the top with other game state variables
 const playerChargingState: Record<number, boolean> = {};  // Track if player is currently charging
 
-// Start the server *****************************************************************************************************************
+// Create a state object to pass to the power up functions
+const powerUpState = {
+  playerScoreMultipliers,
+  playerSuperChargesUsed,
+  playerChargingState,
+  playerScore
+};
 
+// Start the server *****************************************************************************************************************
 
 startServer(world => {
   
@@ -168,30 +172,33 @@ startServer(world => {
   world.onPlayerLeave = player => onPlayerLeave(world, player);
   spawnJoinNpc(world);
   spawnPracticeNpc(world);
+
+  // Build Chambers and courses
   
-  // Build both courses
   buildChamberCourse(world);
   buildPracticeCourse(world);
+  buildChamberWalls(world);
 
   // Spawn heat clusters at each position
 
   GAME_CONFIG.HEAT_CLUSTERS.forEach(cluster => {
-    spawnHeatCluster(world, cluster.position, cluster.id);
+    spawnHeatCluster(world, cluster.position, cluster.id, powerUpState);
   });
 
   // Spawn super charges at each position
   
   GAME_CONFIG.SUPER_CHARGES.forEach(charge => {
-    spawnSuperCharge(world, charge.position, charge.id);
+    spawnSuperCharge(world, charge.position, charge.id, powerUpState);
   });
 
- // Spawn the power up examples
 
-  clusterExample(world);
-  superChargeExample(world);
+  // AUDIO  ********************************************************************************************
 
-
-
+  new Audio({
+    uri: 'audio/music/outworld-theme.mp3', 
+    loop: true,
+    volume: 0.3,
+   }).play(world);
 
 
  // Player Join Functions **************************************************************************************
@@ -207,10 +214,16 @@ startServer(world => {
      modelScale: 0.5,
    });
 
-  
-   playerEntity.spawn(world, GAME_CONFIG.POSITIONS.GAME_JOIN);
+   playerEntity.spawn(world, getRandomGameJoinSpawn());
 
-      // Setup Teleport Input
+   world.chatManager.sendPlayerMessage(player, 'Welcome to Voltech!', '00FF00');
+   world.chatManager.sendPlayerMessage(player, 'Use [W,A,S,D] to move, spacebar to jump, and shift to run.');
+   world.chatManager.sendPlayerMessage(player, 'When you are ready, grab your gear and join the next shift.');
+   world.chatManager.sendPlayerMessage(player, 'Have questions? Type !about or !tips in the chat.');
+   world.chatManager.sendPlayerMessage(player, 'Good luck!');
+
+
+    // Setup Teleport Input
 
    playerEntity.controller!.onTickWithPlayerInput = (entity: PlayerEntity, input: PlayerInput) => {
     if (input.q) {
@@ -223,16 +236,16 @@ startServer(world => {
    // Set collision groups to prevent player-to-player collisions
 
    playerEntity.setCollisionGroupsForSolidColliders({
-    belongsTo: [CollisionGroup.PLAYER],
-    collidesWith: [CollisionGroup.BLOCK, CollisionGroup.ENTITY, CollisionGroup.ENTITY_SENSOR],
-   });
+     belongsTo: [CollisionGroup.PLAYER],
+     collidesWith: [CollisionGroup.BLOCK, CollisionGroup.ENTITY, CollisionGroup.ENTITY_SENSOR],
+    });
 
    // Update sensor colliders to prevent interference from other players
 
    playerEntity.setCollisionGroupsForSensorColliders({
-    belongsTo: [CollisionGroup.ENTITY_SENSOR],
-    collidesWith: [CollisionGroup.BLOCK, CollisionGroup.ENTITY],
-   });
+     belongsTo: [CollisionGroup.ENTITY_SENSOR],
+     collidesWith: [CollisionGroup.BLOCK, CollisionGroup.ENTITY],
+    });
 
 
    // Initialize teleport charges for each player
@@ -252,7 +265,22 @@ startServer(world => {
      }
 
      const playerId = playerEntity.id!;
+     const heatPercent = (playerHeatLevel[playerId] / MAX_HEAT_LEVEL) * 100;
 
+     // Show heat warning when heat level is dangerous
+     if (heatPercent > 75) {
+       playerEntity.player.ui.sendData({
+         type: 'heatWarning',
+         show: true
+       });
+     } else {
+       playerEntity.player.ui.sendData({
+         type: 'heatWarning',
+         show: false
+       });
+     }
+
+     // Regular state update
      const stateUpdate = {
        type: 'updatePlayerState',
        heatLevel: playerHeatLevel[playerId] ?? 1,
@@ -263,11 +291,10 @@ startServer(world => {
        playerId: playerId,
        lastShiftLeaders,
        allTimeLeaders,
-       teleportCharges: playerTeleportCharges[playerId],
+       teleportCharges: playerTeleportCharges[playerId]
      };
-    
+     
      player.ui.sendData(stateUpdate);
-
    }, 100);
   
 
@@ -324,7 +351,6 @@ startServer(world => {
    };
 
  }
-
 
 
  // Player Leave Function and Cleanup **********************************************************
@@ -422,61 +448,6 @@ startServer(world => {
 
   }
 
-  // Cluster Example ****************************************************************************************
-
- function clusterExample(world: World) {
-  const clusterExample = new Entity({
-    name: 'Cluster Example',
-    modelUri: 'models/volcano-dash/energyCluster.gltf',
-    modelLoopedAnimations: ['idle'],
-    modelScale: 2,
-    opacity: 0.5,
-     rigidBodyOptions: {
-       type: RigidBodyType.KINEMATIC_POSITION,
-     }
-  });
- 
-  clusterExample.spawn(world, {x: -23, y: 3, z: 14});
- 
-  const clusterExampleUI = new SceneUI({
-    templateId: 'clusterExample',
-    attachedToEntity: clusterExample,
-    offset: { x: 0, y: 2.5, z: 0 },
-  });
-  
-  clusterExampleUI.load(world);
- }
-
-
-  // SuperCharge Example ****************************************************************************************
-
-  function superChargeExample(world: World) {
-    const superChargeExample = new Entity({
-
-      name: 'SuperCharge Example',
-      modelUri: 'models/volcano-dash/hazmatSuitOnStand.gltf',
-      modelLoopedAnimations: ['idle'],
-      modelScale: 0.5,
-      
-        rigidBodyOptions: {
-          type: RigidBodyType.KINEMATIC_POSITION,
-        }
-    });
-     
-    superChargeExample.spawn(world, {x: 0, y: 2, z: 12}, { x: 0, y: Math.PI, z: 0, w: 0 });
-     
-
-    const superChargeExampleUI = new SceneUI({
-      templateId: 'superChargeExample',
-      attachedToEntity: superChargeExample,
-      offset: { x: 0, y: 2.5, z: 0 },
-    });
-
-      
-    superChargeExampleUI.load(world);
-  }
-
-
 
  // Add Player to Queue Function ******************************************************************************
  // This function handles the queueing process for players waiting to start a new game.
@@ -512,7 +483,7 @@ startServer(world => {
    }
  }
 
- // Queue Game (Countdown) Function *******************************************************************************************
+ // Queue Game (Countdown) Function ********************************************************************************
  // This function handles countdown phase before the shift starts.
  // It sends countdown updates to all players in the queue and starts the shift when the countdown is complete.
  // It also handles the reset of partnerships and selections at the start of the countdown.
@@ -554,7 +525,7 @@ startServer(world => {
          type: 'gameStart'
        });
       
-       playerEntity.setPosition(GAME_CONFIG.POSITIONS.ARENA);
+       playerEntity.setPosition(getRandomArenaSpawn());
        GAME_PLAYER_ENTITIES.add(playerEntity);
 
        // Re-lock pointer for gameplay
@@ -577,10 +548,10 @@ startServer(world => {
    }, GAME_CONFIG.START_DELAY * 1000);
  }
 
- // Start Game (Shift) Function *******************************************************************************************************
+ // Start Game (Shift) Function *********************************************************************************
  // This function handles the actual game logic after the countdown phase.
- // It initializes active players, sets up teleport input handling, and starts score accumulation.
- // It also spawns the rising lava platform and super charges.
+ // It initializes active players and starts score accumulation.
+ // It also spawns the rising lava platform.
 
  function startGame(world: World) {
    gameState = 'inProgress';
@@ -631,117 +602,21 @@ startServer(world => {
 
    updateScore();
 
-   // Chamber Heat Function ****************************************************************************************
-
-    function updateChamberHeat() {
-     const chamberHeatInterval = setInterval(() => {
-       if (ACTIVE_PLAYERS.size > 0 && gameState === 'inProgress') {
-         ACTIVE_PLAYERS.forEach(playerEntity => {
-           playerHeatLevel[playerEntity.id!] += CHAMBER_HEAT_INCREASE;
-        
-           // Check for overheat
-           if (playerHeatLevel[playerEntity.id!] >= MAX_HEAT_LEVEL) {
-             overHeat(playerEntity);
-          }
-         });
-       } else {
-         clearInterval(chamberHeatInterval);
-       }
-     }, CHAMBER_HEAT_INCREASE_RATE);
-   }
-
-   updateChamberHeat();
-
-
-   // RISING LAVA  ************************************************************************
-
-   // Create Rising Lava Platform Entity ---------
-
-    const risingLava = new Entity({
-     blockTextureUri: 'blocks/lava/lava.png',
-     blockHalfExtents: { 
-       x: LAVA_HALF_EXTENT_X, 
-       y: LAVA_HALF_EXTENT_Y, 
-       z: LAVA_HALF_EXTENT_Z 
-     },
-     rigidBodyOptions: {
-       type: RigidBodyType.KINEMATIC_VELOCITY,
-       linearVelocity: { x: 0, y: 0.5, z: 0 },
-       colliders: [
-         {
-           shape: ColliderShape.BLOCK,
-           halfExtents: { 
-             x: LAVA_HALF_EXTENT_X, 
-             y: LAVA_HALF_EXTENT_Y, 
-             z: LAVA_HALF_EXTENT_Z 
-           },
-           isSensor: true,
-          },
-        ],
-      },
-    });
-
-
-   // Create Rising Lava Platform Movement -----------------
-
-    risingLava.onTick = () => {
-     if (risingLava.position.y >= LAVA_MAX_HEIGHT) {
-       risingLava.setLinearVelocity({ x: 0, y: 0, z: 0 });
-       if (gameState === 'inProgress') {
-         setTimeout(() => endGame(world), LAVA_RISE_DELAY * 1000); // Delay before lava rises
-       }
-     } else {
-      risingLava.setLinearVelocity({ x: 0, y: LAVA_RISE_VELOCITY, z: 0 }); // Rise until reaching max height
-     }
-    };
-
-    // Create Rising Lava Collision --------------------
-
-    risingLava.onEntityCollision = (risingLava: Entity, other: Entity, started: boolean) => {
-   
-     if (!(other instanceof PlayerEntity)) return; // Safety check - only process collisions with player entities
-   
-     const playerEntity = other as PlayerEntity;
-   
-     if (started) { // When player first touches lava
-       // Clear any existing heat interval for this player
-       // This prevents multiple intervals from stacking if player
-       // enters/exits lava rapidly
-       if (playerHeatIntervals[playerEntity.id!]) {
-         clearInterval(playerHeatIntervals[playerEntity.id!]);
-         delete playerHeatIntervals[playerEntity.id!];
-       }
-     
-       // Start a new interval to increase player's heat level while in lava
-       playerHeatIntervals[playerEntity.id!] = setInterval(() => {
-         // Only increase heat if player is still in lava and still active in game
-         if (playerInLava[playerEntity.id!] && ACTIVE_PLAYERS.has(playerEntity)) {
-           playerHeatLevel[playerEntity.id!] += LAVA_HEAT_INCREASE;
-         } else {
-           // If player is no longer in lava or not active, clean up the interval
-           clearInterval(playerHeatIntervals[playerEntity.id!]);
-           delete playerHeatIntervals[playerEntity.id!];
-         }
-       }, LAVA_HEAT_INCREASE_RATE);
-     }
-
-     playerInLava[playerEntity.id!] = started; // Track whether player is currently in lava
-    }; 
-
-    // Spawn Rising Lava Platform -----------------
-
-    risingLava.spawn(world, { x: LAVA_START_X + 1, y: LAVA_Y, z: LAVA_START_Z + 1 });
-
-    // Clear last shift leaderboard
-
-    lastShiftLeaders.length = 0;
-
-    // Make sure all players have their pointers locked for gameplay
-  
-    ACTIVE_PLAYERS.forEach(playerEntity => {
-      playerEntity.player.ui.lockPointer(true);
-    });
-  }
+   // Initialize rising lava
+   initiateRisingLava(
+     world,
+     gameState,
+     playerHeatIntervals,
+     playerInLava,
+     playerHeatLevel,
+     ACTIVE_PLAYERS,
+     LAVA_HEAT_INCREASE,
+     LAVA_HEAT_INCREASE_RATE,
+     endGame,
+     LAVA_START_X,
+     LAVA_START_Z
+   );
+ }
 
  // End Game Function *******************************************************************************************************
 
@@ -751,6 +626,15 @@ startServer(world => {
    gameState = 'awaitingPlayers';
 
    resetPartnerships();
+
+   // Send survival message to active players who didn't overheat
+   ACTIVE_PLAYERS.forEach(playerEntity => {
+     if (playerHeatLevel[playerEntity.id!] < MAX_HEAT_LEVEL) {
+       playerEntity.player.ui.sendData({
+         type: 'survivalMessage'
+       });
+     }
+   });
 
    // Update leaderboards for all active players
    ACTIVE_PLAYERS.forEach(playerEntity => {
@@ -770,18 +654,8 @@ startServer(world => {
     });
 
     // Start draining the lava
-    world.entityManager.getAllEntities().forEach(entity => {
-      if (entity.blockTextureUri?.includes('lava.png')) {
-      
-        entity.setLinearVelocity({ x: 0, y: -3.0, z: 0 }); // Set downward velocity
-        entity.onTick = () => { // Update tick function to stop at original height                         
-          if (entity.position.y <= LAVA_Y) {
-            entity.setLinearVelocity({ x: 0, y: 0, z: 0 });
-            entity.setPosition({ x: LAVA_START_X, y: LAVA_Y, z: LAVA_START_Z });
-          }
-        };
-      }
-    });
+    
+    drainLava(world, LAVA_START_X, LAVA_START_Z);
 
     // Update top scores and move players after 10 seconds
 
@@ -795,9 +669,8 @@ startServer(world => {
         // Despawn hazmat suit for each player
         despawnHazmatSuit(world, playerEntity);
 
-        // Move player back to lobby
-
-        playerEntity.setPosition(GAME_CONFIG.POSITIONS.LOBBY);
+        // Use random spawn instead of fixed LOBBY position
+        playerEntity.setPosition(getRandomGameJoinSpawn());
         playerHeatLevel[playerEntity.id!] = 1;
         playerInLava[playerEntity.id!] = false;
       
@@ -831,6 +704,11 @@ startServer(world => {
   function overHeat(playerEntity: PlayerEntity) {
     const playerId = playerEntity.id!;
     
+    // Send overheat message
+    playerEntity.player.ui.sendData({
+      type: 'overheatMessage'
+    });
+
     // Clear the heat interval if it exists
     if (playerHeatIntervals[playerId]) {
         clearInterval(playerHeatIntervals[playerId]);
@@ -838,7 +716,7 @@ startServer(world => {
     }
 
     playerEntity.setLinearVelocity({ x: 0, y: 0, z: 0 });  // Stop player movement
-    playerEntity.setPosition(GAME_CONFIG.POSITIONS.LOBBY); // Move player to lobby
+    playerEntity.setPosition(getRandomGameJoinSpawn()); // Move player to lobby
     playerHeatLevel[playerId] = 1;                         // Reset heat level
     playerInLava[playerId] = false;                       // Reset lava status
     ACTIVE_PLAYERS.delete(playerEntity);                   // Remove from active players
@@ -912,200 +790,6 @@ startServer(world => {
     });
   }
 
- // Heat Cluster Function ****************************************************************************************
-
- function spawnHeatCluster(world: World, position: { x: number, y: number, z: number }, clusterId: string) {
-   const heatCluster = new Entity({
-     name: 'Heat Cluster',
-     modelUri: 'models/volcano-dash/energyCluster.gltf',
-     modelLoopedAnimations: ['idle'],
-     modelScale: 1.5,
-     opacity: 0.5,
-     rigidBodyOptions: {
-       type: RigidBodyType.KINEMATIC_POSITION,
-       colliders: [
-       {
-         shape: ColliderShape.CYLINDER,
-         radius: 1,
-         halfHeight: 1,
-         isSensor: true,
-           onCollision: (other: BlockType | Entity, started: boolean) => {
-             if (other instanceof PlayerEntity) {
-               const playerId = other.id!;
-                
-                 // Initialize multiplier if needed
-
-                 if (!playerScoreMultipliers[playerId]) {
-                   playerScoreMultipliers[playerId] = 1;
-                 }
-
-                 if (started) {
-                   playerScoreMultipliers[playerId] = 10;
-                   other.player.ui.sendData({
-                     type: 'multiplierActive',
-                     multiplier: 10
-                    });
-                   // Send heat cluster notification
-                   other.player.ui.sendData({
-                     type: 'heatClusterStatus',
-                     active: true,
-                     message: 'Stay in the heat cluster to absorb energy faster'
-                    });
-                  } else {
-                   playerScoreMultipliers[playerId] = 1;
-                   other.player.ui.sendData({
-                     type: 'multiplierInactive'
-                    });
-                   // Clear heat cluster notification
-                   other.player.ui.sendData({
-                     type: 'heatClusterStatus',
-                     active: false
-                   });
-                 }
-               }
-            }
-          }
-        ],
-      },
-    });
-
-   heatCluster.spawn(world, position);
-    
-   heatCluster.setTintColor({ r: 255, g: 100, b: 0 });
-
-   const heatClusterUI = new SceneUI({
-     templateId: 'heatCluster',
-     attachedToEntity: heatCluster,
-     offset: { x: 0, y: 2.5, z: 0 },
-   });
-  
-   heatClusterUI.load(world);
-  }
-
- // Super Charge Function ****************************************************************************************
-
-  function spawnSuperCharge(world: World, position: { x: number, y: number, z: number }, chargeId: string) {
-    const superCharge = new Entity({
-     name: 'Super Charge',
-     modelUri: 'models/volcano-dash/superChargeStation.gltf',
-     modelLoopedAnimations: ['idle'],
-     modelScale: 1,
-     rigidBodyOptions: {
-       type: RigidBodyType.KINEMATIC_POSITION,
-       colliders: [
-         {
-           shape: ColliderShape.CYLINDER,
-           radius: 1,
-           halfHeight: 1,
-           isSensor: true,
-           onCollision: (other: BlockType | Entity, started: boolean) => {
-             if (other instanceof PlayerEntity) {
-               const playerEntity = other;
-               const playerId = playerEntity.id!;
-               
-               if (!playerSuperChargesUsed[playerId]) {
-                 playerSuperChargesUsed[playerId] = new Set();
-               }
-
-               if (started) {
-                 if (playerSuperChargesUsed[playerId].has(chargeId)) {
-                   playerEntity.player.ui.sendData({
-                     type: 'superChargeState',
-                     state: 'alreadyUsed'
-                   });
-                   return;
-                 }
-
-                 playerEntity.player.ui.sendData({
-                   type: 'superChargeState',
-                   state: 'enter'
-                 });
-
-                 let isCharging = false;
-                 let chargeInterval: NodeJS.Timer | null = null;
-
-                 const originalHandler = playerEntity.controller!.onTickWithPlayerInput;
-
-                 playerEntity.controller!.onTickWithPlayerInput = (
-                   entity: PlayerEntity, 
-                   input: Partial<Record<string | number | symbol, boolean>>,
-                   cameraOrientation: PlayerCameraOrientation,
-                   deltaTimeMs: number
-                 ) => {
-                   if (originalHandler) {
-                     originalHandler(entity, input, cameraOrientation, deltaTimeMs);
-                   }
-
-                   if (input.f && !isCharging && !playerSuperChargesUsed[playerId].has(chargeId) && !playerChargingState[playerId]) {
-                     isCharging = true;
-                     playerChargingState[playerId] = true;  // Mark player as charging
-                     let chargeTime = 0;
-                     
-                     chargeInterval = setInterval(() => {
-                       chargeTime += 100;
-                       const progress = Math.min((chargeTime / 3000) * 100, 100);
-                       
-                       playerEntity.player.ui.sendData({
-                         type: 'superChargeState',
-                         state: 'charging',
-                         progress: progress
-                       });
-                       
-                       if (progress >= 100) {
-                         if (chargeInterval) {
-                           clearInterval(chargeInterval);
-                           chargeInterval = null;
-                         }
-                         playerScore[playerId] = Math.floor(playerScore[playerId] * 2);  // Ensure integer result
-                         playerSuperChargesUsed[playerId].add(chargeId);
-                         isCharging = false;
-                         playerChargingState[playerId] = false;  // Clear charging state
-                         
-                         playerEntity.player.ui.sendData({
-                           type: 'superChargeState',
-                           state: 'complete'
-                         });
-                       }
-                     }, 100);
-                   } else if (!input.f && isCharging) {
-                     if (chargeInterval) {
-                       clearInterval(chargeInterval);
-                       chargeInterval = null;
-                     }
-                     isCharging = false;
-                     playerChargingState[playerId] = false;  // Clear charging state
-                     
-                     playerEntity.player.ui.sendData({
-                       type: 'superChargeState',
-                       state: 'reset'
-                     });
-                   }
-                 };
-               } else {
-                 playerEntity.player.ui.sendData({
-                   type: 'superChargeState',
-                   state: 'exit'
-                 });
-               }
-             }
-           }
-         }
-       ],
-     }
-   });
-
-   superCharge.spawn(world, position);
-  }
-
-  // AUDIO  ********************************************************************************************
-
- new Audio({
-  uri: 'audio/music/outworld-theme.mp3', 
-  loop: true,
-  volume: 0.3,
- }).play(world);
-
-
  // TELEPORT FUNCTION ********************************************************************************************
 
  function teleport(playerEntity: PlayerEntity) {
@@ -1152,122 +836,43 @@ startServer(world => {
     type: 'teleportSuccess',
     remainingCharges: playerTeleportCharges[playerId]
   });
-  console.log(`[TELEPORT] Success - Teleport completed for player ${playerId}`);
  }
 
- // Chamber Wall Block Entities  -----------------------------------
+ // Lighting ****************************************************************************************
 
- const frontChamberWall = new Entity({
-  blockTextureUri: 'blocks/blackStone.png',
-  blockHalfExtents: { x: 12, y: 11, z: 0.5 },
-  rigidBodyOptions: {
-    type: RigidBodyType.KINEMATIC_VELOCITY,
-  },
-});
+ //world.setAmbientLightIntensity(0.8); // Reduce ambient light intensity
+ world.setAmbientLightColor({ r: 218, g: 127, b: 80 }); // slightly purple
 
-frontChamberWall.spawn(world, { x: 15, y: 28, z: -1.5 });
+ // Create purple point lights
+ const orangeLightPositions = [
+   { x: -6, y: 2, z: 26 },
+   { x: -9, y: 2, z: 26 },
+   { x: 13, y: 2, z: 12 },
+   { x: 17, y: 2, z: 12 }
+ ];
 
-const backChamberWall = new Entity({
-  blockTextureUri: 'blocks/blackStone.png',
-  blockHalfExtents: { x: 12, y: 11, z: 0.5 },
-  rigidBodyOptions: {
-    type: RigidBodyType.KINEMATIC_VELOCITY,
-  },
-});
-
-
-backChamberWall.spawn(world, { x: 15, y: 28, z: -24.5 });
-
-const rightChamberWall = new Entity({
-  blockTextureUri: 'blocks/blackStone.png',
-  blockHalfExtents: { x: 0.5, y: 11, z: 11.5 },
-  rigidBodyOptions: {
-    type: RigidBodyType.KINEMATIC_VELOCITY,
-  },
-});
+ orangeLightPositions.forEach(position => {
+   (new Light({
+     color: { r: 218, g: 127, b: 80 },
+     intensity: 40,
+     position,
+   })).spawn(world);
+ });
 
 
-rightChamberWall.spawn(world, { x: 26.5, y: 28, z: -13.5 });
+ // Register chat commands
 
-const frontPracticeWall = new Entity({
-  blockTextureUri: 'blocks/blackStone.png',
-  blockHalfExtents: { x: 12, y: 11, z: 0.5 },
-  rigidBodyOptions: {
-    type: RigidBodyType.KINEMATIC_VELOCITY,
-  },
-});
+ world.chatManager.registerCommand('!about', (player, args, message) => {
+   player.ui.sendData({
+     type: 'showAboutOverlay'
+   });
+ });
 
-frontPracticeWall.spawn(world, { x: -8, y: 28, z: -1.5 });
-
-const leftPracticeWall = new Entity({
-  blockTextureUri: 'blocks/blackStone.png',
-  blockHalfExtents: { x: 0.5, y: 22, z: 11.5 },
-  rigidBodyOptions: {
-    type: RigidBodyType.KINEMATIC_VELOCITY,
-  },
-});
-
-
-leftPracticeWall.spawn(world, { x: -19.5, y: 17, z: -13.5 });
-
-const backPracticeWall = new Entity({
-  blockTextureUri: 'blocks/blackStone.png',
-  blockHalfExtents: { x: 12, y: 22, z: 0.5 },
-  rigidBodyOptions: {
-    type: RigidBodyType.KINEMATIC_VELOCITY,
-  },
-});
-
-
-
-backPracticeWall.spawn(world, { x: -8, y: 17, z: -24.5 });
-
-const lobbyRoof = new Entity({
-  blockTextureUri: 'blocks/blackStone.png',
-  blockHalfExtents: { x: 36, y: 0.5, z: 26 },
-  rigidBodyOptions: {
-    type: RigidBodyType.KINEMATIC_VELOCITY,
-  },
-});
-
-
-lobbyRoof.spawn(world, { x: 4, y: 17.5, z: 25 });
-
-
-// Lighting ****************************************************************************************
-
-world.setAmbientLightIntensity(0.8); // Reduce ambient light intensity
-world.setAmbientLightColor({ r: 218, g: 127, b: 80 }); // slightly purple
-
-// Create purple point lights
-const orangeLightPositions = [
-  { x: -6, y: 2, z: 26 },
-  { x: -9, y: 2, z: 26 },
-  { x: 13, y: 2, z: 12 },
-  { x: 17, y: 2, z: 12 }
-];
-
-orangeLightPositions.forEach(position => {
-  (new Light({
-    color: { r: 218, g: 127, b: 80 },
-    intensity: 40,
-    position,
-  })).spawn(world);
-});
-
- // large ceiling spotlight
- (new Light({
-  type: LightType.SPOTLIGHT,
-  angle: Math.PI / 8,
-  color: { r: 255, g: 255, b: 255 },
-  intensity: 40,
-  penumbra: 0.5,
-  position: { x: 0, y: 40, z: 0 },
-  trackedPosition: { x: 0, y: 0, z: 0 },
-})).spawn(world);
-
-
-
+ world.chatManager.registerCommand('!tips', (player, args, message) => {
+   player.ui.sendData({
+     type: 'showTipsOverlay'
+   });
+ });
 
 });
 
