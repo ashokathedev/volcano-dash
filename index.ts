@@ -231,7 +231,7 @@ startServer(world => {
    world.chatManager.sendPlayerMessage(player, 'Welcome to Voltech!', '00FF00');
    world.chatManager.sendPlayerMessage(player, 'Use [W,A,S,D] to move, spacebar to jump, and shift to run.');
    world.chatManager.sendPlayerMessage(player, 'When you are ready, grab your gear and join the next shift.');
-   world.chatManager.sendPlayerMessage(player, 'Have questions? Type !about or !tips in the chat.');
+   world.chatManager.sendPlayerMessage(player, 'Have questions? Type /about or /tips in the chat.');
    world.chatManager.sendPlayerMessage(player, 'Good luck!');
 
 
@@ -309,15 +309,6 @@ startServer(world => {
      player.ui.sendData(stateUpdate);
    }, 100);
   
-
-   // Setup a first person camera for the player
-
-   player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
-   player.camera.setOffset({ x: 0, y: 0.2, z: 0 });
-   player.camera.setModelHiddenNodes(['head', 'neck']);
-   player.camera.setForwardOffset(0.3);
-
-
 
    // Respawn player at when they Overheat curing the game
 
@@ -999,19 +990,19 @@ startServer(world => {
 
  // Register chat commands
 
- world.chatManager.registerCommand('!about', (player, args, message) => {
+ world.chatManager.registerCommand('/about', (player, args, message) => {
    player.ui.sendData({
      type: 'showAboutOverlay'
    });
  });
 
- world.chatManager.registerCommand('!tips', (player, args, message) => {
+ world.chatManager.registerCommand('/tips', (player, args, message) => {
    player.ui.sendData({
      type: 'showTipsOverlay'
    });
  });
 
- world.chatManager.registerCommand('!credits', (player, args, message) => {
+ world.chatManager.registerCommand('/credits', (player, args, message) => {
   player.ui.sendData({
     type: 'showCreditsOverlay'
   });
@@ -1076,6 +1067,22 @@ startServer(world => {
  };
  
  pathfind();
+
+ // Setup Camera View Command ***************************************************
+
+ world.chatManager.registerCommand('/view', (player, args, message) => {
+   if (player.camera.mode === PlayerCameraMode.FIRST_PERSON) {
+     // Switch to third person
+     player.camera.setMode(PlayerCameraMode.THIRD_PERSON);
+     world.chatManager.sendPlayerMessage(player, 'Switched to third person view', '00FF00');
+   } else {
+     // Switch to first person
+     player.camera.setMode(PlayerCameraMode.FIRST_PERSON);
+     player.camera.setOffset({ x: 0, y: 0.2, z: 0 });
+     player.camera.setForwardOffset(0.8);
+     world.chatManager.sendPlayerMessage(player, 'Switched to first person view', '00FF00');
+   }
+ });
 
 });
 
