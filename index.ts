@@ -1,8 +1,11 @@
-// Volcano Dash
+// Volcano Dash -- Hytopia Game Jam 1 Submission by Ashoka (@ashokawashere)
 
-// formant riser by neopolitansixth -- https://freesound.org/s/582459/ -- License: Attribution 4.0
-
-
+   /* OBJECTIVE: Players harvest energy from inside a lava chamber.
+      -- When the player overheats they are teleported back into the lobby.
+      -- Players can choose a partner and use Q to teleport to them during the round.
+      -- Players can stand in heat clusters to harvest energy faster.
+      -- Players can use super charge stations by holding F to double their current harvested energy
+ */
 
 
 import {
@@ -73,8 +76,7 @@ const GAME_CONFIG = {
     { id: 'charge6', position: { x: 15, y: 25, z: -21 } },    // Level D 
     { id: 'charge7', position: { x: 23, y: 25, z: -13 } },    //  Level D 
     { id: 'charge8', position: { x: 15, y: 25, z: -5 } },     // Level D 
-    { id: 'charge9', position: { x: 15, y: 37, z: -7 } },     // Level D 
-    { id: 'charge10', position: { x: 15, y: 37, z: -19 } },     // Level D 
+    { id: 'charge10', position: { x: 15, y: 37, z: -13 } },     // Level E 
 
   ],
 
@@ -89,6 +91,8 @@ const GAME_CONFIG = {
     { id: 'cluster6', position: { x: 13, y: 17, z: -11 } },  // Level C Cluster
     { id: 'cluster7', position: { x: 23, y: 32, z: -13 } },  // Level E Cluster
     { id: 'cluster8', position: { x: 7, y: 32, z: -13 } },  // Level E Cluster
+    { id: 'cluster9', position: { x: 15, y: 37, z: -7 } },  // Level E Cluster
+    { id: 'cluster10', position: { x: 15, y: 37, z: -19 } },  // Level E Cluster
   ]
 };
 
@@ -149,7 +153,7 @@ const allTimeLeaders: Array<{name: string, score: number}> = [];   // All-time t
 // Heat Management
 const MAX_HEAT_LEVEL = 1000;            // Maximum heat a player can accumulate before overheating
 const CHAMBER_HEAT_INCREASE = 1;        // Regular Heat increase value in the chamber
-const CHAMBER_HEAT_INCREASE_RATE = 100; // Regular Heat increase rate (ms) in the chambeer
+const CHAMBER_HEAT_INCREASE_RATE = 200; // Regular Heat increase rate (ms) in the chamber
 const LAVA_HEAT_INCREASE = 20;          // Heat increase value when in lava
 const LAVA_HEAT_INCREASE_RATE = 100;    // Heat increase rate (ms) when in Lava (value/rate determines how fast heat increases)
 
@@ -217,7 +221,7 @@ startServer(world => {
    const playerEntity = new PlayerEntity({
      player,
      name: 'Player',
-     modelUri: 'models/volcano-dash/gameJamPlayer.gltf',
+     modelUri: 'models/volcano-dash/gameJamPlayerRed.gltf',
      modelLoopedAnimations: ['idle'],
      modelScale: 0.5,
    });
@@ -565,6 +569,9 @@ startServer(world => {
    gameState = 'inProgress';
    gameStartTime = Date.now();
 
+   // Reset last shift leaderboard at start of new round
+   lastShiftLeaders.length = 0;
+
    // Play game start chamber sound
    new Audio({
     uri: 'sounds/sfx/misc/volcano-dash/joseegn-ui-sound-return-1.mp3',
@@ -593,6 +600,9 @@ startServer(world => {
      playerTeleportCharges[playerId] = INITIAL_TELEPORT_CHARGES;
      playerScore[playerId] = 0;
      playerScoreMultipliers[playerId] = 1;
+     
+     // Reset super charge stations for this player
+     playerSuperChargesUsed[playerId] = new Set<string>();
 
      // Send teleport sound event to player's UI
      playerEntity.player.ui.sendData({
@@ -601,8 +611,26 @@ startServer(world => {
      });
    });
 
-  
-   // Scoring Function ****************************************************************************************
+   // Heat Level Increase Function *******************************************
+   function updateHeat() {
+     const heatIntervalToClear = setInterval(() => {
+       if (ACTIVE_PLAYERS.size > 0 && gameState === 'inProgress') {
+         ACTIVE_PLAYERS.forEach(playerEntity => {
+           const playerId = playerEntity.id!;
+           
+           // Only increase heat if player isn't already in lava
+           // (lava heat is handled separately in risingLava.ts)
+           if (!playerInLava[playerId]) {
+             playerHeatLevel[playerId] += CHAMBER_HEAT_INCREASE;
+           }
+         });
+       } else {
+         clearInterval(heatIntervalToClear);
+       }
+     }, CHAMBER_HEAT_INCREASE_RATE);
+   }
+
+   // Scoring Function ************************************************************************
 
    function updateScore() {
      const scoreIntervaltoClear = setInterval(() => {
@@ -629,7 +657,9 @@ startServer(world => {
      }, SCORE_INTERVAL);
    }
 
+   // Call both update functions
    updateScore();
+   updateHeat();
 
    // Initialize rising lava
    initiateRisingLava(
@@ -645,6 +675,16 @@ startServer(world => {
      LAVA_START_X,
      LAVA_START_Z
    );
+
+   // Show "Shift in Progress" message to non-active players
+   world.entityManager.getAllPlayerEntities().forEach((playerEntity: PlayerEntity) => {
+     if (!ACTIVE_PLAYERS.has(playerEntity)) {
+       playerEntity.player.ui.sendData({
+         type: 'shiftStatus',
+         status: 'inProgress'
+       });
+     }
+   });
  }
 
  // End Game Function *******************************************************************************************************
@@ -653,6 +693,14 @@ startServer(world => {
    if (gameState !== 'inProgress') return;
   
    gameState = 'awaitingPlayers';
+
+   // Hide "Shift in Progress" message immediately for all players
+   world.entityManager.getAllPlayerEntities().forEach((playerEntity: PlayerEntity) => {
+     playerEntity.player.ui.sendData({
+       type: 'shiftStatus',
+       status: 'ended'
+     });
+   });
 
    // Stop lava ambient sound using pause() instead of stop()
    if (lavaAmbientSound) {
@@ -683,6 +731,19 @@ startServer(world => {
        updateLeaderboards(playerEntity);
      }
    });
+
+   // Find the top scorer from the last shift
+   if (lastShiftLeaders.length > 0) {
+     const topPerformer = lastShiftLeaders[0];
+     // Send winner message to ALL players in the server, not just active ones
+     world.entityManager.getAllPlayerEntities().forEach((playerEntity: PlayerEntity) => {
+       playerEntity.player.ui.sendData({
+         type: 'shiftWinner',
+         winnerName: topPerformer.name,
+         score: topPerformer.score
+       });
+     });
+   }
 
    // Send end game message with final leaderboards
    ACTIVE_PLAYERS.forEach(playerEntity => {
@@ -766,26 +827,35 @@ startServer(world => {
         delete playerHeatIntervals[playerId];
     }
 
+    // Update leaderboards BEFORE removing from active players
+    // This ensures their score is counted for the shift
+    if (playerScore[playerId] > 0) {
+      updateLeaderboards(playerEntity);
+    }
+
+    // Update top score if player has a higher score than their current top score
+    if (playerScore[playerId] > (playerTopScore[playerId] || 0)) {
+      playerTopScore[playerId] = playerScore[playerId];
+    }
+
     playerEntity.setLinearVelocity({ x: 0, y: 0, z: 0 });  // Stop player movement
     playerEntity.setPosition(getRandomGameJoinSpawn()); // Move player to lobby
     playerHeatLevel[playerId] = 1;                         // Reset heat level
     playerInLava[playerId] = false;                       // Reset lava status
-    ACTIVE_PLAYERS.delete(playerEntity);                   // Remove from active players
+    
+    // Now remove from active players after updating leaderboards
+    ACTIVE_PLAYERS.delete(playerEntity);                   
 
     removePartnership(playerId);
     
-    // Update top score if player has a higher score than their current top score
-    if (playerScore[playerId] > (playerTopScore[playerId] || 0)) {
-        playerTopScore[playerId] = playerScore[playerId];
-    }
-    
-    // Update leaderboards if player has a score
-    if (playerScore[playerId] > 0) {
-        updateLeaderboards(playerEntity);
-    }
-
     // Reset charging state
     playerChargingState[playerId] = false;
+
+    // Show "Shift in Progress" message since they're now spectating
+    playerEntity.player.ui.sendData({
+      type: 'shiftStatus',
+      status: 'inProgress'
+    });
 
     // Despawn hazmat suit
     despawnHazmatSuit(world, playerEntity);
@@ -941,6 +1011,12 @@ startServer(world => {
    });
  });
 
+ world.chatManager.registerCommand('!credits', (player, args, message) => {
+  player.ui.sendData({
+    type: 'showCreditsOverlay'
+  });
+});
+
  // Mind Flayer NPC Movement **********************************************
  
  let targetWaypointIndex = 0;
@@ -982,7 +1058,7 @@ startServer(world => {
  // Pathfind to the next waypoint as we reach each waypoint
  const pathfind = () => {
    if (targetWaypointIndex >= WAYPOINT_COORDINATES.length) {
-     // Reset the index to 0 instead of stopping
+ 
      targetWaypointIndex = 0;
    }
        
@@ -1001,7 +1077,9 @@ startServer(world => {
  
  pathfind();
 
-
 });
+
+
+
 
 

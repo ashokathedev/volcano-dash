@@ -130,7 +130,8 @@
       "id": 22,
       "name": "lava",
       "textureUri": "blocks/lava.png",
-      "isCustom": false
+      "isCustom": false,
+      "isLiquid": true
     },
     {
       "id": 23,
@@ -250,13 +251,15 @@
       "id": 42,
       "name": "water-flow",
       "textureUri": "blocks/water-flow.png",
-      "isCustom": false
+      "isCustom": false,
+      "isLiquid": true
     },
     {
       "id": 43,
       "name": "water-still",
       "textureUri": "blocks/water-still.png",
-      "isCustom": false
+      "isCustom": false,
+      "isLiquid": true
     },
     {
       "id": 100,

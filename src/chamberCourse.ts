@@ -69,7 +69,31 @@ export function buildChamberCourse(world: World) {
     [0,lvlAheight+4,9,101], [1,lvlAheight+4,9,101], [0,lvlAheight+4,10,101], [1,lvlAheight+4,10,101],
     [2,lvlAheight+4,9,104], [2,lvlAheight+4,10,104], [3,lvlAheight+4,9,104], [3,lvlAheight+4,10,104],
     [-1,lvlAheight+4,9,104], [-1,lvlAheight+4,10,104], [-2,lvlAheight+4,9,104], [-2,lvlAheight+4,10,104],
-    [-3,lvlAheight+4,10,101], [-3,lvlAheight+4,9,101], [4,lvlAheight+4,10,101], [4,lvlAheight+4,9,101]
+    [-3,lvlAheight+4,10,101], [-3,lvlAheight+4,9,101], [4,lvlAheight+4,10,101], [4,lvlAheight+4,9,101],
+
+    // CHUNK ADD-ON coordinates
+    [-6,lvlAheight+4,2,104], [-6,lvlAheight+4,1,104], [-6,lvlAheight+4,0,104], [-6,lvlAheight+4,-1,104],
+    [-7,lvlAheight+4,1,104], [-7,lvlAheight+4,0,104], [-7,lvlAheight+5,0,104], [-7,lvlAheight+5,1,104],
+    [-7,lvlAheight+4,2,104], [-7,lvlAheight+4,-1,104], [-6,lvlAheight+4,-2,104], [-7,lvlAheight+4,-2,104],
+    [-7,lvlAheight+5,-1,104], [-6,lvlAheight+4,3,104], [-7,lvlAheight+4,3,104], [-7,lvlAheight+5,2,104],
+    [-7,lvlAheight+6,1,104], [-7,lvlAheight+6,0,104], [-6,lvlAheight+7,-1,104], [-8,lvlAheight+4,3,104],
+    [-8,lvlAheight+4,2,104], [-8,lvlAheight+4,1,104], [-8,lvlAheight+4,0,104], [-8,lvlAheight+4,-1,104],
+    [-8,lvlAheight+4,-2,104], [-7,lvlAheight+6,2,104], [-7,lvlAheight+6,-1,104], [-8,lvlAheight+5,1,104],
+    [-8,lvlAheight+5,0,104], [-6,lvlAheight+7,2,104], [-8,lvlAheight+5,2,104], [-8,lvlAheight+5,-1,104],
+    [-9,lvlAheight+4,-2,104], [-9,lvlAheight+4,-1,104], [-9,lvlAheight+4,0,104], [-9,lvlAheight+4,1,104],
+    [-9,lvlAheight+4,2,104], [-9,lvlAheight+4,3,104], [-6,lvlAheight+7,3,104], [-6,lvlAheight+7,-2,104],
+    [-5,lvlAheight+7,-2,104], [-5,lvlAheight+7,-1,104], [-5,lvlAheight+7,2,104], [-5,lvlAheight+7,3,104],
+    [7,lvlAheight+4,3,104], [8,lvlAheight+4,3,104], [9,lvlAheight+4,3,104], [10,lvlAheight+4,3,104],
+    [10,lvlAheight+4,2,104], [10,lvlAheight+4,1,104], [10,lvlAheight+4,0,104], [10,lvlAheight+4,-1,104],
+    [10,lvlAheight+4,-2,104], [9,lvlAheight+4,2,104], [8,lvlAheight+4,2,104], [7,lvlAheight+4,2,104],
+    [7,lvlAheight+4,1,104], [8,lvlAheight+4,1,104], [9,lvlAheight+4,1,104], [7,lvlAheight+4,0,104],
+    [8,lvlAheight+4,0,104], [9,lvlAheight+4,0,104], [7,lvlAheight+4,-1,104], [8,lvlAheight+4,-1,104],
+    [9,lvlAheight+4,-1,104], [7,lvlAheight+4,-2,104], [8,lvlAheight+4,-2,104], [9,lvlAheight+4,-2,104],
+    [9,lvlAheight+5,-1,104], [9,lvlAheight+5,0,104], [9,lvlAheight+5,1,104], [9,lvlAheight+5,2,104],
+    [8,lvlAheight+5,-1,104], [8,lvlAheight+5,0,104], [8,lvlAheight+5,1,104], [8,lvlAheight+5,2,104],
+    [8,lvlAheight+6,2,104], [8,lvlAheight+6,1,104], [8,lvlAheight+6,0,104], [8,lvlAheight+6,-1,104],
+    [7,lvlAheight+7,-1,104], [7,lvlAheight+7,-2,104], [6,lvlAheight+7,-2,104], [6,lvlAheight+7,-1,104],
+    [7,lvlAheight+7,2,104], [7,lvlAheight+7,3,104], [6,lvlAheight+7,2,104], [6,lvlAheight+7,3,104],
   ];
 
   // Build static platforms
@@ -128,7 +152,8 @@ export function buildChamberCourse(world: World) {
   lvlAMovingPlatform2.spawn(world, { x: 14, y: 6, z: -12 });
 
   // Level A Vertical Platforms to Level B ****************************************************************
-
+ // DISABLED UNTIL VERT AUTO JUMP IS FIXED
+ /*
   const lvlAVertPlatform1 = new Entity({
     blockTextureUri: 'blocks/lavaStone.png',
     blockHalfExtents: { x: 1, y: 0.5, z: 3 },
@@ -175,6 +200,7 @@ export function buildChamberCourse(world: World) {
   };
 
   lvlAVertPlatform2.spawn(world, { x: 8, y: 15, z: -13 });
+  */
 
   // Level B Course Platforms ****************************************************************
 

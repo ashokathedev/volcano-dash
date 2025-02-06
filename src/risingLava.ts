@@ -3,6 +3,7 @@ import {
   RigidBodyType,
   ColliderShape,
   PlayerEntity,
+  Audio,
   World
 } from 'hytopia';
 
@@ -82,11 +83,39 @@ export function initiateRisingLava(
       playerHeatIntervals[playerEntity.id!] = setInterval(() => {
         if (playerInLava[playerEntity.id!] && ACTIVE_PLAYERS.has(playerEntity)) {
           playerHeatLevel[playerEntity.id!] += LAVA_HEAT_INCREASE;
+          
+          // Send near overheat warning when heat level is high
+          if (playerHeatLevel[playerEntity.id!] > 750) {
+            playerEntity.player.ui.sendData({
+              type: 'nearOverheat',
+              active: true
+            });
+          }
         } else {
           clearInterval(playerHeatIntervals[playerEntity.id!]);
           delete playerHeatIntervals[playerEntity.id!];
         }
       }, LAVA_HEAT_INCREASE_RATE);
+
+      // Send lava state when player enters
+      playerEntity.player.ui.sendData({
+        type: 'inLava',
+        active: true
+      });
+    } else {
+      // Send lava state when player exits
+      playerEntity.player.ui.sendData({
+        type: 'inLava',
+        active: false
+      });
+      
+      // Clear near overheat warning if heat level drops
+      if (playerHeatLevel[playerEntity.id!] <= 750) {
+        playerEntity.player.ui.sendData({
+          type: 'nearOverheat',
+          active: false
+        });
+      }
     }
 
     playerInLava[playerEntity.id!] = started;

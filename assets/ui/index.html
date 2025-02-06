@@ -5,44 +5,62 @@
   let currentPlayerId = null;  // Track current player's ID
   let playerNickname = '';     // Track player nickname
   let currentChargingSound = null;
+  let currentOverheatSound = null;
+  let currentLavaSound = null;
 
   // Add this near the top with other utility functions
   function playButtonClickSound() {
-    const clickSound = new Audio(`{{CDN_ASSETS_URL}}/sounds/sfx/ui/button-click.mp3`);
-    clickSound.volume = 0.2;
-    clickSound.play().catch(err => {
-      console.error('Error playing click sound:', err);
-    });
+    try {
+      const clickSound = new Audio(`{{CDN_ASSETS_URL}}/sounds/sfx/ui/button-click.mp3`);
+      clickSound.volume = 0.2;
+      // Only play if user has interacted with the page
+      if (document.documentElement.hasAttribute('data-user-interacted')) {
+        clickSound.play().catch(err => {
+          console.error('Error playing click sound:', err);
+        });
+      }
+    } catch (err) {
+      console.error('Error creating click sound:', err);
+    }
   }
 
   // Add this function near other utility functions
   function playChargingSound() {
     if (!currentChargingSound) {
-      currentChargingSound = new Audio(`{{CDN_ASSETS_URL}}/sounds/sfx/misc/volcano-dash/neopolitansixth-formant-riser.mp3`);
-      currentChargingSound.volume = 0.5; // Increased volume
-      
-      // Add load event handler
-      currentChargingSound.addEventListener('canplaythrough', () => {
-        currentChargingSound.play().catch(err => {
-          console.error('Error playing charging sound:', err);
+      try {
+        currentChargingSound = new Audio(`{{CDN_ASSETS_URL}}/sounds/sfx/misc/volcano-dash/neopolitansixth-formant-riser.mp3`);
+        currentChargingSound.volume = 0.8;
+        
+        currentChargingSound.addEventListener('canplaythrough', () => {
+          if (document.documentElement.hasAttribute('data-user-interacted')) {
+            currentChargingSound.play().catch(err => {
+              console.error('Error playing charging sound:', err);
+            });
+          }
         });
-      });
 
-      // Add error handler
-      currentChargingSound.addEventListener('error', (e) => {
-        console.error('Error loading charging sound:', e);
-      });
-
-      // Force load
-      currentChargingSound.load();
+        currentChargingSound.load();
+      } catch (err) {
+        console.error('Error creating charging sound:', err);
+      }
     }
   }
 
   function stopChargingSound() {
     if (currentChargingSound) {
-      currentChargingSound.pause();
-      currentChargingSound.currentTime = 0;
-      currentChargingSound = null;
+      // Fade out over 0.5 seconds
+      const fadeOut = setInterval(() => {
+        if (currentChargingSound && currentChargingSound.volume > 0.05) {
+          currentChargingSound.volume -= 0.1;
+        } else {
+          clearInterval(fadeOut);
+          if (currentChargingSound) {
+            currentChargingSound.pause();
+            currentChargingSound.currentTime = 0;
+            currentChargingSound = null;
+          }
+        }
+      }, 50);
     }
   }
 
@@ -63,6 +81,14 @@
 
   // Main event handler - Processes all incoming game events
   hytopia.onData((data) => {
+    if (data.type === 'nearOverheat') {
+      if (data.active) {
+        playOverheatSound();
+      } else {
+        stopOverheatSound();
+      }
+    }
+
     // Handle initial state
     if (data.type === 'initialState') {
       currentPlayerName = data.playerName;
@@ -96,6 +122,8 @@
       if (bottomUI) {
         bottomUI.style.display = 'none';
       }
+      stopOverheatSound();
+      stopLavaSound();
     }
 
     // Handle name confirmation
@@ -113,6 +141,11 @@
                                     heatPercent > 50 ? '#ff6600' : '#ffaa00';
 
       document.getElementById('lavaOverlay').style.opacity = data.inLava ? '0.4' : '0';
+      if (data.inLava) {
+        playLavaSound();
+      } else {
+        stopLavaSound();
+      }
       document.getElementById('currentScore').textContent = formatScore(data.score);
       document.getElementById('personalBestScore').textContent = formatScore(data.topScore);
       
@@ -180,9 +213,7 @@
           chargeBar.style.display = 'block';
           chargeFill.style.width = `${data.progress}%`;
           superChargePrompt.textContent = 'Hold F Until Complete!';
-          // Play charging sound when charging starts
-          if (data.progress === 0) {
-            console.log('Starting charge sound...'); // Debug log
+          if (data.progress <= 5) {
             playChargingSound();
           }
           break;
@@ -191,7 +222,6 @@
           chargeBar.style.display = 'none';
           chargeFill.style.width = '0%';
           superChargePrompt.textContent = 'Oh No! You let go!';
-          console.log('Stopping charge sound (reset)...'); // Debug log
           stopChargingSound();
           setTimeout(() => {
             superChargePrompt.textContent = 'Hold F to Super Charge your Energy';
@@ -201,7 +231,6 @@
         case 'complete':
           chargeBar.style.display = 'none';
           superChargePrompt.textContent = 'Super Charge Successful!';
-          console.log('Stopping charge sound (complete)...'); // Debug log
           stopChargingSound();
           setTimeout(() => {
             superChargeUI.style.display = 'none';
@@ -210,7 +239,6 @@
           
         case 'exit':
           superChargeUI.style.display = 'none';
-          console.log('Stopping charge sound (exit)...'); // Debug log
           stopChargingSound();
           break;
 
@@ -368,6 +396,12 @@
       overlay.style.display = 'flex';
     }
 
+    if (data.type === 'showCreditsOverlay') {
+      const overlay = document.getElementById('creditsOverlay');
+      overlay.style.display = 'flex';
+    }
+
+
     if (data.type === 'heatWarning') {
       const heatWarning = document.getElementById('heatWarning');
       if (heatWarning) {
@@ -391,7 +425,7 @@
         message.style.display = 'block';
         setTimeout(() => {
           message.style.display = 'none';
-        }, 5000);
+        }, 10000);
       }
     }
 
@@ -411,6 +445,35 @@
       const audio = new Audio(`{{CDN_ASSETS_URL}}/sounds/sfx/misc/volcano-dash/lupine-elfenia-future-ui-acquired.mp3`);
       audio.volume = 0.6;
       audio.play();
+    }
+
+    if (data.type === 'shiftWinner') {
+      const winnerMessage = document.getElementById('shiftWinnerMessage');
+      const content = winnerMessage.querySelector('.winner-content');
+      
+      content.innerHTML = `
+        <div>Top Performer Last Shift:</div>
+        <span class="winner-name">${data.winnerName}</span>
+        <div>${formatScore(data.score)} Energy</div>
+      `;
+      
+      winnerMessage.style.opacity = '1';
+      
+      // Hide the message after 10 seconds
+      setTimeout(() => {
+        winnerMessage.style.opacity = '0';
+      }, 10000);
+    }
+
+    if (data.type === 'shiftStatus') {
+      const message = document.getElementById('shiftInProgressMessage');
+      if (message) {
+        if (data.status === 'inProgress') {
+          message.classList.add('visible');
+        } else {
+          message.classList.remove('visible');
+        }
+      }
     }
   });
 
@@ -485,27 +548,22 @@
   // Name submission handler - Processes initial player name entry and starts game
   window.submitName = function() {
     playButtonClickSound();
-    console.log('submitName function called');
     const nameInput = document.getElementById('nameInput');
     const welcomeScreen = document.getElementById('welcomeScreen');
     const name = nameInput?.value.trim();
     if (name) {
-      console.log('Submitting name:', name);
       playerNickname = name;
       
-      // Hide welcome screen with fade out
       if (welcomeScreen) {
         welcomeScreen.style.opacity = '0';
         welcomeScreen.style.transition = 'opacity 0.5s';
         
-        // Remove from DOM after fade and lock pointer
         setTimeout(() => {
           welcomeScreen.style.display = 'none';
-          hytopia.lockPointer();  // Lock pointer after welcome screen is gone
+          hytopia.sendData({ type: 'lockPointer' });
         }, 500);
       }
       
-      // Send the nickname to the server
       hytopia.sendData({
         type: 'setNickname',
         nickname: name
@@ -610,6 +668,7 @@
     if (e.key === 'Enter') {
       const aboutOverlay = document.getElementById('aboutOverlay');
       const tipsOverlay = document.getElementById('tipsOverlay');
+      const creditsOverlay = document.getElementById('creditsOverlay');
       
       if (aboutOverlay.style.display === 'flex') {
         closeAboutOverlay();
@@ -617,8 +676,12 @@
       if (tipsOverlay.style.display === 'flex') {
         closeTipsOverlay();
       }
+      if (creditsOverlay.style.display === 'flex') {
+        closeCreditsOverlay();
+      }
     }
   });
+
 
   function closeTipsOverlay() {
     playButtonClickSound();
@@ -626,6 +689,19 @@
     overlay.style.opacity = '0';
     overlay.style.transition = 'opacity 0.5s';
     
+    setTimeout(() => {
+      overlay.style.display = 'none';
+      overlay.style.opacity = '1';
+    }, 500);
+  }
+
+  function closeCreditsOverlay() {
+    playButtonClickSound();
+    const overlay = document.getElementById('creditsOverlay');
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.5s';
+    
+
     setTimeout(() => {
       overlay.style.display = 'none';
       overlay.style.opacity = '1';
@@ -645,10 +721,119 @@
         } else if (commandText === '!tips') {
           const overlay = document.getElementById('tipsOverlay');
           overlay.style.display = 'flex';
+        } else if (commandText === '!credits') {
+          const overlay = document.getElementById('creditsOverlay');
+          overlay.style.display = 'flex';
         }
       });
     });
+
   });
+
+  // Add this to track user interaction
+  document.addEventListener('click', () => {
+    document.documentElement.setAttribute('data-user-interacted', 'true');
+    
+    // Preload both sounds after user interaction
+    const preloadLavaSound = new Audio();
+    const preloadOverheatSound = new Audio();
+
+    // Add error handlers to debug path issues
+    preloadLavaSound.addEventListener('error', (e) => {
+    });
+
+    preloadOverheatSound.addEventListener('error', (e) => {
+    });
+
+    // Set sources
+    preloadLavaSound.src = `{{CDN_ASSETS_URL}}/sounds/sfx/misc/volcano-dash/vd-scriptro-alien-alarm-1a.mp3`;
+    preloadOverheatSound.src = `{{CDN_ASSETS_URL}}/sounds/sfx/misc/volcano-dash/vd-odilonmarcenaro-arming-burglar-alarm-2.mp3`;
+    
+    preloadLavaSound.load();
+    preloadOverheatSound.load();
+  }, { once: true });
+
+  function playOverheatSound() {
+    if (!currentOverheatSound) {
+      try {
+        currentOverheatSound = new Audio();
+        currentOverheatSound.volume = 0.8;
+        currentOverheatSound.loop = true;
+        
+        // Set up event listeners before setting src
+        currentOverheatSound.addEventListener('canplaythrough', () => {
+          if (document.documentElement.hasAttribute('data-user-interacted')) {
+            currentOverheatSound.play()
+              .then(() => console.log('Overheat sound playing'))
+              .catch(err => console.error('Failed to play overheat sound:', err));
+          }
+        });
+
+        currentOverheatSound.addEventListener('error', (e) => {
+        });
+
+        // Set source after listeners
+        currentOverheatSound.src = `{{CDN_ASSETS_URL}}/sounds/sfx/misc/volcano-dash/vd-odilonmarcenaro-arming-burglar-alarm-2.mp3`;
+      } catch (err) {
+        console.error('Error creating overheat sound:', err);
+      }
+    }
+  }
+
+  function stopOverheatSound() {
+    if (currentOverheatSound) {
+      const fadeOut = setInterval(() => {
+        if (currentOverheatSound && currentOverheatSound.volume > 0.05) {
+          currentOverheatSound.volume -= 0.1;
+        } else {
+          clearInterval(fadeOut);
+          if (currentOverheatSound) {
+            currentOverheatSound.pause();
+            currentOverheatSound.currentTime = 0;
+            currentOverheatSound = null;
+          }
+        }
+      }, 50);
+    }
+  }
+
+  function playLavaSound() {
+    if (!currentLavaSound) {
+      try {
+        currentLavaSound = new Audio();
+        currentLavaSound.volume = 0.8;
+        currentLavaSound.loop = true;
+        
+        currentLavaSound.addEventListener('canplaythrough', () => {
+          if (document.documentElement.hasAttribute('data-user-interacted')) {
+            currentLavaSound.play()
+              .catch(err => console.error('Failed to play lava sound:', err));
+          }
+        });
+
+        currentLavaSound.src = `{{CDN_ASSETS_URL}}/sounds/sfx/misc/volcano-dash/vd-scriptro-alien-alarm-1a.mp3`;
+      } catch (err) {
+        console.error('Error creating lava sound:', err);
+      }
+    }
+  }
+
+  function stopLavaSound() {
+    if (currentLavaSound) {
+      const fadeOut = setInterval(() => {
+        if (currentLavaSound && currentLavaSound.volume > 0.05) {
+          currentLavaSound.volume -= 0.1;
+        } else {
+          clearInterval(fadeOut);
+          if (currentLavaSound) {
+            currentLavaSound.pause();
+            currentLavaSound.currentTime = 0;
+            currentLavaSound = null;
+          }
+        }
+      }, 50);
+    }
+  }
 </script>
 
 <!-- ==================== Main Game UI Structure ==================== -->
@@ -697,6 +882,16 @@
       <div class="leaderboard-title">All Time Leaders</div>
       <div id="allTimeLeaders" class="leaderboard-list"></div>
     </div>
+  </div>
+
+  <!-- Add this new HTML element after the leaderboards-container div -->
+  <div id="shiftWinnerMessage" class="shift-winner-message">
+    <div class="winner-content"></div>
+  </div>
+
+  <!-- Add this after the shiftWinnerMessage div -->
+  <div id="shiftInProgressMessage" class="shift-in-progress-message">
+    <div class="progress-content">Shift in Progress</div>
   </div>
 
   <!-- Bottom UI container -->
@@ -774,6 +969,7 @@
   <div class="chat-commands">
     <div class="command">!about</div>
     <div class="command">!tips</div>
+    <div class="command">!credits</div>
   </div>
 </div>
 
@@ -848,6 +1044,28 @@ Use F at a supercharge station to 2x your harvested energy. Each station can onl
   </div>
 </div>
 
+<!-- Add new Credits Overlay -->
+<div id="creditsOverlay" class="overlay" style="display: none;">
+  <div class="overlay-content">
+    <div class="credits-text">Game Credits
+
+Volcano Dash was created by Ashoka (@ashokawashere) for Hytopia Game Jam 1 in February 2025.
+
+<strong class="section-header">Additional Credits</strong>
+Sound FX from the following individuals on Freesound.org:
+<br> scriptro (alient alarm 1a)
+<br> odilonmarcenaro (arming burglar alarm 2)
+<br> neopolitansixth (formant riser)
+<br> sleep (140bpm303swirl)
+<br> joseegn (ui sound return 1)
+<br> lupine elfenia (future ui acquired)
+<br> shelbyshark (space rumble)
+
+</div>
+    <button id="closeCredits" class="submit-button" onClick="closeCreditsOverlay()">Press Enter to Close</button>
+  </div>
+</div>
+
 <!-- Add these new message overlays before the closing body tag -->
 <div id="overheatMessage" class="center-message" style="display: none;">
   Your Suit Overheated! Extraction Successful
@@ -857,8 +1075,12 @@ Use F at a supercharge station to 2x your harvested energy. Each station can onl
   Congratulations! You survived the Shift! Transporting...
 </div>
 
-<!-- ==================== Styling ==================== -->
- 
+<!-- Add this with the other templates -->
+<template id="heatCluster">
+  <div class="heat-cluster-label">Heat Cluster</div>
+</template>
+
+<!-- Add the corresponding style -->
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Inter:wght@400;600&display=swap');
 
@@ -1773,10 +1995,40 @@ Use F at a supercharge station to 2x your harvested energy. Each station can onl
     margin-bottom: 5px;
   }
 
+  .credits-text {
+    white-space: pre-line;
+    line-height: 1.6;
+    margin-bottom: 30px;
+    font-size: 14px;
+    color: #eee;
+
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-weight: 400;
+  }
+
+  .credits-text::first-line {
+    color: #ff6600;
+    font-size: 24px;
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    letter-spacing: 2px;
+  }
+
+  .credits-text strong {
+    color: #ff8533;
+  }
+
+  .credits-text strong.section-header {
+    display: block;
+    margin-top: 20px;
+    margin-bottom: 5px;
+  }
+
+
   .chat-commands {
     position: fixed;
-    left: 20px;
-    top: 20px;
+    right: 20px;
+    bottom: 20px;
     background: rgba(0, 0, 0, 0.7);
     padding: 10px;
     border-radius: 8px;
@@ -1894,6 +2146,79 @@ Use F at a supercharge station to 2x your harvested energy. Each station can onl
     font-size: 24px;
     font-family: 'Orbitron', sans-serif;
     letter-spacing: 1px;
+  }
+
+  .heat-cluster-label {
+    background: rgba(0, 0, 0, 0.8);
+    color: #ff6600;
+    padding: 8px 15px;
+    border-radius: 5px;
+    font-size: 14px;
+    text-align: center;
+    font-family: 'Orbitron', sans-serif;
+    pointer-events: none;
+  }
+
+  .shift-winner-message {
+    position: fixed;
+    left: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    border: 2px solid #ff6600;
+    border-radius: 12px;
+    padding: 20px 30px;
+    color: white;
+    font-family: 'Inter', sans-serif;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+    text-align: center;
+    max-width: 300px;
+  }
+
+  .shift-winner-message .winner-content {
+    font-size: 18px;
+    line-height: 1.4;
+  }
+
+  .shift-winner-message .winner-name {
+    color: #ff6600;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 20px;
+    display: block;
+    margin: 8px 0;
+  }
+
+  .shift-in-progress-message {
+    position: fixed;
+    left: 20px;  /* Changed from right: 20px to left: 20px */
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    border: 2px solid #ff6600;
+    border-radius: 12px;
+    padding: 15px 20px;  /* Reduced padding */
+    color: #ff6600;
+    font-family: 'Orbitron', sans-serif;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+    text-align: center;
+  }
+
+  .shift-in-progress-message.visible {
+    opacity: 1;
+  }
+
+  .progress-content {
+    color: #ff6600;
+    font-size: 18px;  /* Reduced from 24px */
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 700;
+    letter-spacing: 1px;  /* Reduced from 2px */
   }
 </style>
 

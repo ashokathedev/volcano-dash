@@ -6,6 +6,7 @@ import {
   PlayerEntity,
   World,
   SceneUI,
+  Audio,
   type PlayerCameraOrientation
 } from 'hytopia';
 
@@ -79,14 +80,6 @@ export function spawnHeatCluster(
 
   heatCluster.spawn(world, position);
   heatCluster.setTintColor({ r: 255, g: 100, b: 0 });
-
-  const heatClusterUI = new SceneUI({
-    templateId: 'heatCluster',
-    attachedToEntity: heatCluster,
-    offset: { x: 0, y: 2.5, z: 0 },
-  });
- 
-  heatClusterUI.load(world);
 }
 
 export function spawnSuperCharge(
@@ -148,7 +141,9 @@ export function spawnSuperCharge(
 
                   if (input.f && !isCharging && !state.playerSuperChargesUsed[playerId].has(chargeId) && !state.playerChargingState[playerId]) {
                     isCharging = true;
-                    state.playerChargingState[playerId] = true;  // Mark player as charging
+                    state.playerChargingState[playerId] = true;
+                    superCharge.stopModelAnimations(['idle']);
+                    superCharge.startModelLoopedAnimations(['charging']);
                     let chargeTime = 0;
                     
                     chargeInterval = setInterval(() => {
@@ -170,6 +165,8 @@ export function spawnSuperCharge(
                         state.playerSuperChargesUsed[playerId].add(chargeId);
                         isCharging = false;
                         state.playerChargingState[playerId] = false;
+                        superCharge.stopModelAnimations(['charging']);
+                        superCharge.startModelLoopedAnimations(['idle']);
                         
                         playerEntity.player.ui.sendData({
                           type: 'superChargeState',
@@ -184,6 +181,8 @@ export function spawnSuperCharge(
                     }
                     isCharging = false;
                     state.playerChargingState[playerId] = false;
+                    superCharge.stopModelAnimations(['charging']);
+                    superCharge.startModelLoopedAnimations(['idle']);
                     
                     playerEntity.player.ui.sendData({
                       type: 'superChargeState',
