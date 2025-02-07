@@ -359,29 +359,31 @@ startServer(world => {
  // Player Leave Function and Cleanup **********************************************************
 
  function onPlayerLeave(world: World, player: Player) {
-   world.entityManager.getAllPlayerEntities().forEach((entity: PlayerEntity) => {
-     if (QUEUED_PLAYER_ENTITIES.has(entity)) {
-        QUEUED_PLAYER_ENTITIES.delete(entity);
+   // Find the specific entity for the leaving player
+   const leavingEntity = world.entityManager.getAllPlayerEntities().find(
+     entity => entity.player.id === player.id
+   );
+
+   if (leavingEntity) {
+     if (QUEUED_PLAYER_ENTITIES.has(leavingEntity)) {
+       QUEUED_PLAYER_ENTITIES.delete(leavingEntity);
      }
 
-    // Clear any existing heat intervals
-
-    if (playerHeatIntervals[entity.id!]) {
-      clearInterval(playerHeatIntervals[entity.id!]);
-      delete playerHeatIntervals[entity.id!];
-    }
+     // Clear any existing heat intervals
+     if (playerHeatIntervals[leavingEntity.id!]) {
+       clearInterval(playerHeatIntervals[leavingEntity.id!]);
+       delete playerHeatIntervals[leavingEntity.id!];
+     }
     
-    // Clear score multipliers and super charges used
+     // Clear score multipliers and super charges used
+     delete playerScoreMultipliers[leavingEntity.id!];
+     delete playerSuperChargesUsed[leavingEntity.id!];
     
-    delete playerScoreMultipliers[entity.id!];
-    delete playerSuperChargesUsed[entity.id!];
-    
-    // Handle overheat and despawn the player
-    
-    overHeat(entity);
-    entity.despawn();
-    });
-  }
+     // Handle overheat and despawn the player
+     overHeat(leavingEntity);
+     leavingEntity.despawn();
+   }
+ }
 
  // Join NPC Function and UI ****************************************************************************************
 
